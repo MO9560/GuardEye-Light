@@ -121,15 +121,22 @@ class CameraService : LifecycleService() {
 
     private fun startBotPolling() {
         TelegramBot.configure(Config.botToken, Config.chatId)
+        android.util.Log.d("GuardEye", "Bot polling started. token=${Config.botToken.take(10)}... chatId=${Config.chatId}")
+        // 先发一条测试消息确认能发送
+        val ok = TelegramBot.sendText("🤖 GuardEye Bot 已连接！发送 /start 开始监控")
+        android.util.Log.d("GuardEye", "Test sendText result: $ok")
         pollJob = serviceScope.launch {
             while (isActive) {
                 try {
                     val updates = TelegramBot.getUpdates(lastOffset)
+                    android.util.Log.d("GuardEye", "getUpdates returned ${updates.size} messages")
                     for (update in updates) {
+                        android.util.Log.d("GuardEye", "Command: ${update.text}")
                         lastOffset = update.messageId + 1L
                         handleCommand(update.text)
                     }
                 } catch (e: Exception) {
+                    android.util.Log.e("GuardEye", "Polling error: ${e.message}", e)
                     e.printStackTrace()
                 }
                 delay(3000)
