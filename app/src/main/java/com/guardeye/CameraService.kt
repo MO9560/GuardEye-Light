@@ -51,8 +51,17 @@ class CameraService : LifecycleService() {
         val notification = buildNotification("GuardEye 监控已开启")
         startForeground(NOTIFICATION_ID, notification)
 
+        // 复制 assets 中的模型到内部存储（首次）
+        val modelFile = File(filesDir, "uniform_detector.tflite")
+        if (!modelFile.exists()) {
+            assets.open("uniform_detector.tflite").use { input ->
+                modelFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+
         // 加载 YOLO 模型
-        val modelFile = File(filesDir, "yolov8n.tflite")
         if (modelFile.exists()) {
             detector = Detector(modelFile.absolutePath)
             if (!detector!!.load()) {
