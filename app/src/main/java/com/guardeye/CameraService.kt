@@ -69,7 +69,7 @@ class CameraService : LifecycleService() {
 
     private fun stopMonitoring() {
         pollJob?.cancel()
-        alarmReceiver?.cancel()
+        alarmReceiver = null
         detector?.close()
         detector = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -159,8 +159,8 @@ class CameraService : LifecycleService() {
 
     private fun sendStatus() {
         val battery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            val bm = getSystemService(Context.BATTERY_SERVICE) as android.content.BatteryManager
-            bm.getIntProperty(android.content.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         } else 0
         val mem = Runtime.getRuntime()
         val usedMB = (mem.totalMemory() - mem.freeMemory()) / 1024 / 1024
