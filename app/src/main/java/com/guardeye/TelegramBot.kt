@@ -92,20 +92,24 @@ object TelegramBot {
             val url = "$BASE_URL/bot$_token/getUpdates?offset=$offset&timeout=0"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
-                val json = JSONObject(response.body?.string() ?: "{}")
+                val body = response.body?.string() ?: "{}"
+                android.util.Log.d("GuardEye", "getUpdates response: ${body.take(500)}")
+                val json = JSONObject(body)
                 val result = json.optJSONArray("result") ?: JSONArray()
                 val updates = mutableListOf<Update>()
                 for (i in 0 until result.length()) {
                     val obj = result.getJSONObject(i)
+                    val updateId = obj.optLong("update_id", 0L)
                     val msg = obj.optJSONObject("message") ?: continue
                     val text = msg.optString("text", "")
-                    val chatIdFrom = msg.optJSONObject("chat")?.optString("id", "") ?: continue
-                    val msgId = msg.optInt("message_id", 0)
-                    updates.add(Update(text, chatIdFrom, msgId))
+                    val chatObj = msg.optJSONObject("chat")
+                    val chatIdFrom = chatObj?.optLong("id", 0L)?.toString() ?: ""
+                    updates.add(Update(text, chatIdFrom, updateId))
                 }
                 updates
             }
         } catch (e: Exception) {
+            android.util.Log.e("GuardEye", "getUpdates error: ${e.message}", e)
             e.printStackTrace()
             emptyList()
         }
