@@ -66,8 +66,10 @@ class Detector(private val modelPath: String) {
     }
 
     private fun loadModelFile(path: String): MappedByteBuffer {
-        val fd = java.io.FileInputStream(path).fd
-        return FileChannel.open(fd).map(FileChannel.MapMode.READ_ONLY, 0, java.io.File(path).length())
+        val file = java.io.File(path)
+        val inputStream = FileInputStream(file)
+        val fileChannel = inputStream.channel
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, file.length())
     }
 
     /**
@@ -95,9 +97,9 @@ class Detector(private val modelPath: String) {
         val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
         resized.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
         for (pixel in pixels) {
-            imgData.put(((pixel shr 16 and 0xFF) / 255f * 255).toByte())
-            imgData.put(((pixel shr 8  and 0xFF) / 255f * 255).toByte())
-            imgData.put(((pixel and 0xFF) / 255f * 255).toByte())
+            imgData.put(((pixel shr 16 and 0xFF) / 255f * 255).toInt().toByte())
+            imgData.put(((pixel shr 8  and 0xFF) / 255f * 255).toInt().toByte())
+            imgData.put(((pixel and 0xFF) / 255f * 255).toInt().toByte())
         }
 
         // YOLOv8 输出：[1, 84, 8400] (COCO 80类 + 4坐标 + 1置信度)

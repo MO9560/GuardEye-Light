@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.os.*
+import android.os.BatteryManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.LifecycleService
@@ -266,7 +267,7 @@ class CameraService : LifecycleService() {
             val ry2 = (d.box[3] * h).toInt().coerceIn(0, result.height - 1)
             canvas.drawRect(rx1.toFloat(), ry1.toFloat(), rx2.toFloat(), ry2.toFloat(), paint)
             val label = "${d.label} ${(d.confidence * 100).toInt()}%${if (d.isPolice) " 🚨" else ""}"
-            canvas.drawText(label, rx1.toFloat(), (ry1 - 4).coerceAtLeast(36f), textPaint)
+            canvas.drawText(label, rx1.toFloat(), ((ry1 - 4).coerceAtLeast(36)).toFloat(), textPaint)
         }
         return result
     }
