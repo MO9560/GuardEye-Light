@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GuardEye</string>
+    <string name="channel_name">GuardEye 监控</string>
+    <string name="channel_desc">后台监控服务通知</string>
+    <string name="notification_title">GuardEye 运行中</string>
+    <string name="notification_text">监控服务已开启</string>
+</resources>
