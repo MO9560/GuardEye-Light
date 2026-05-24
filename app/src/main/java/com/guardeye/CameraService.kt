@@ -10,6 +10,7 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.guardeye.Detector
@@ -20,12 +21,12 @@ import java.util.concurrent.Executors
 
 class CameraService : LifecycleService() {
 
-    companion.object {
+    companion object {
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "guardeye_channel"
-        const val ACTION_START = "com.guardeye.START"
-        const val ACTION_STOP = "com.guardeye.STOP"
-        const val ACTION_CAPTURE = "com.guardeye.CAPTURE"
+        const val ACTION_START = "com.guardeye.action.START"
+        const val ACTION_STOP = "com.guardeye.action.STOP"
+        const val ACTION_CAPTURE = "com.guardeye.action.CAPTURE"
     }
 
     private val vibrator: Vibrator? by lazy { getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
@@ -240,42 +241,39 @@ class CameraService : LifecycleService() {
     private fun captureAndSend(hd: Boolean) {
         serviceScope.launch {
             val photoFile = File(cacheDir, "capture_${System.currentTimeMillis()}.jpg")
-            takePicture(photoFile, hd) { bitmap ->
-                if (bitmap == null) {
-                    TelegramBot.sendText("❌ 拍照失败")
-                    return@takePicture
-                }
+            val bitmap = takePicture(photoFile, hd)
+            if (bitmap == null) {
+                TelegramBot.sendText("❌ 拍照失败")
+                return@launch
+            }
 
-                // AI 识别
-                if (Config.detectionEnabled && detector != null) {
-                    val detections = detector!!.detect(bitmap)
-                    if (!detections.isNullOrEmpty()) {
-                        // 绘制标注
-                        val annotated = drawBoxes(bitmap, detections)
-                        val policeDetections = detections.filter { it.isPolice }
-                        if (policeDetections.isNotEmpty()) {
-                            val labels = policeDetections.joinToString(", ") {
-                                "${it.label} (${(it.confidence * 100).toInt()}%)"
-                            }
-                            TelegramBot.sendText("🚨 检测到疑似目标：$labels")
-                            TelegramBot.sendBitmap(annotated, "🚨 GuardEye 告警")
-                            triggerAlert()
-                        } else {
-                            TelegramBot.sendText("ℹ️ 检测到：${detections.joinToString(", ") { it.label }}")
+            // AI 识别
+            if (Config.detectionEnabled && detector != null) {
+                val detections = detector!!.detect(bitmap)
+                if (!detections.isNullOrEmpty()) {
+                    val annotated = drawBoxes(bitmap, detections)
+                    val policeDetections = detections.filter { it.isPolice }
+                    if (policeDetections.isNotEmpty()) {
+                        val labels = policeDetections.joinToString(", ") {
+                            "${it.label} (${(it.confidence * 100).toInt()}%)"
                         }
+                        TelegramBot.sendText("🚨 检测到疑似目标：$labels")
+                        TelegramBot.sendBitmap(annotated, "🚨 GuardEye 告警")
+                        triggerAlert()
                     } else {
-                        // 没人/没车，只发普通图片
-                        if (!hd) TelegramBot.sendBitmap(bitmap)
+                        TelegramBot.sendText("ℹ️ 检测到：${detections.joinToString(", ") { it.label }}")
                     }
+                } else {
+                    if (!hd) TelegramBot.sendBitmap(bitmap)
                 }
+            }
 
-                // 高清图单独发送
-                if (hd) {
-                    FileOutputStream(photoFile).use { fos ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
-                    }
-                    TelegramBot.sendPhoto(photoFile, "📸 GuardEye 实时画面")
+            // 高清图单独发送
+            if (hd) {
+                FileOutputStream(photoFile).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
                 }
+                TelegramBot.sendPhoto(photoFile, "📸 GuardEye 实时画面")
             }
         }
     }

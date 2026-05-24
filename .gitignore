@@ -17,3 +17,5 @@ local.properties
 
 # Logs
 *.log
+app/build/
+local.properties
