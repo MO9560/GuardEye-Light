@@ -104,7 +104,7 @@ object TelegramBot {
                     val text = msg.optString("text", "")
                     val chatObj = msg.optJSONObject("chat")
                     val chatIdFrom = chatObj?.optLong("id", 0L)?.toString() ?: ""
-                    updates.add(Update(text, chatIdFrom, updateId.toInt()))
+                    updates.add(Update(text, chatIdFrom, updateId))
                 }
                 updates
             }
@@ -140,5 +140,5 @@ object TelegramBot {
         }
     }
 
-    data class Update(val text: String, val chatId: String, val messageId: Int)
+    data class Update(val text: String, val chatId: String, val messageId: Long)
 }
