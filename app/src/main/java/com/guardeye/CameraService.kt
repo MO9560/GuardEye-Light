@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.*
 import android.os.*
 import android.os.BatteryManager
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.LifecycleService
@@ -14,10 +16,11 @@ import com.guardeye.Detector
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.Executors
 
 class CameraService : LifecycleService() {
 
-    companion object {
+    companion.object {
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "guardeye_channel"
         const val ACTION_START = "com.guardeye.START"
@@ -31,6 +34,11 @@ class CameraService : LifecycleService() {
     private var pollJob: Job? = null
     private var alarmReceiver: AlarmReceiver? = null
     private var lastOffset = 0L
+
+    // CameraX
+    private var imageCapture: ImageCapture? = null
+    private var cameraInitialized = false
+    private val cameraExecutor = Executors.newSingleThreadExecutor()
 
     override fun onCreate() {
         super.onCreate()
@@ -53,9 +61,9 @@ class CameraService : LifecycleService() {
         startForeground(NOTIFICATION_ID, notification)
 
         // 复制 assets 中的模型到内部存储（首次）
-        val modelFile = File(filesDir, "uniform_detector.tflite")
+        val modelFile = File(filesDir, "yolov8n.tflite")
         if (!modelFile.exists()) {
-            assets.open("uniform_detector.tflite").use { input ->
+            assets.open("yolov8n.tflite").use { input ->
                 modelFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
@@ -70,6 +78,9 @@ class CameraService : LifecycleService() {
             }
         }
 
+        // 初始化 CameraX
+        initCamera()
+
         // 启动 Bot 轮询
         startBotPolling()
 
@@ -82,6 +93,8 @@ class CameraService : LifecycleService() {
         alarmReceiver = null
         detector?.close()
         detector = null
+        cameraInitialized = false
+        cameraExecutor.shutdown()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -118,6 +131,33 @@ class CameraService : LifecycleService() {
         val pi = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarm.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pi)
+    }
+
+    private fun initCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            try {
+                val cameraProvider = cameraProviderFuture.get()
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                val preview = Preview.Builder().build()
+                imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    this@CameraService,
+                    cameraSelector,
+                    preview,
+                    imageCapture
+                )
+                cameraInitialized = true
+                android.util.Log.d("GuardEye", "CameraX initialized")
+            } catch (e: Exception) {
+                android.util.Log.e("GuardEye", "CameraX init failed: ${e.message}", e)
+            }
+        }, ContextCompat.getMainExecutor(this))
     }
 
     private fun startBotPolling() {
@@ -192,6 +232,7 @@ class CameraService : LifecycleService() {
             电量：$battery%
             内存：${usedMB}MB / ${totalMB}MB
             检测模型：${if (detector != null) "✅ 已加载" else "❌ 未加载"}
+            相机：${if (cameraInitialized) "✅ 已初始化" else "❌ 未初始化"}
         """.trimIndent()
         TelegramBot.sendText(status)
     }
@@ -239,29 +280,36 @@ class CameraService : LifecycleService() {
         }
     }
 
-    private fun takePicture(file: File, hd: Boolean, callback: (Bitmap?) -> Unit) {
-        val quality = if (hd) 95 else 40
-        val width = if (hd) 1920 else 640
-
-        // 模拟：创建测试图片（实际使用 CameraX）
-        val bmp = Bitmap.createBitmap(width, (width * 1.33f).toInt(), Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        canvas.drawColor(if (hd) Color.DKGRAY else Color.GRAY)
-        val paint = Paint().apply {
-            color = Color.WHITE
-            textSize = 48f
-            textAlign = Paint.Align.CENTER
+    private suspend fun takePicture(file: File, hd: Boolean): Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        val imageCapture = this.imageCapture
+        if (imageCapture == null || !cameraInitialized) {
+            android.util.Log.e("GuardEye", "CameraX not initialized")
+            cont.resume(null, null)
+            return@suspendCancellableCoroutine
         }
-        canvas.drawText("GuardEye ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}", width / 2f, bmp.height / 2f, paint)
 
-        try {
-            FileOutputStream(file).use { fos ->
-                bmp.compress(Bitmap.CompressFormat.JPEG, quality, fos)
+        val outputFileOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+
+        imageCapture.takePicture(
+            outputFileOptions,
+            cameraExecutor,
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    try {
+                        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                        cont.resume(bitmap, null)
+                    } catch (e: Exception) {
+                        android.util.Log.e("GuardEye", "Failed to load captured image: ${e.message}", e)
+                        cont.resume(null, null)
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    android.util.Log.e("GuardEye", "takePicture failed: ${exception.message}", exception)
+                    cont.resume(null, null)
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        callback(bmp)
+        )
     }
 
     private fun drawBoxes(bitmap: Bitmap, detections: List<Detector.Detection>): Bitmap {
@@ -316,6 +364,7 @@ class CameraService : LifecycleService() {
 
     override fun onDestroy() {
         serviceScope.cancel()
+        cameraExecutor.shutdown()
         super.onDestroy()
     }
 }

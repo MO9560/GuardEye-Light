@@ -47,6 +47,16 @@ Fork 后 Push 到 main 分支即可自动构建。
 ### 下载模型
 YOLOv8n TFLite 模型需放入 `app/src/main/assets/yolov8n.tflite`
 
+下载方式（任选其一）：
+1. [Ultralytics 官方 Release](https://github.com/ultralytics/assets/releases) → 下载 `yolov8n.tflite`
+2. 或自行导出：`yolo export model=yolov8n.pt format=tflite`
+
+下载后放入：
+```
+app/src/main/assets/yolov8n.tflite
+```
+然后重新编译 APK。
+
 ## 技术栈
 
 - Kotlin + CameraX + OkHttp + TensorFlow Lite

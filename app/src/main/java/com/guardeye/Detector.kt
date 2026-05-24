@@ -103,8 +103,8 @@ class Detector(private val modelPath: String) {
             imgData.put(((pixel and 0xFF) / 255f * 255).toInt().toByte())
         }
 
-        // YOLOv8 输出：[1, 84, 8400] (COCO 80类 + 4坐标 + 1置信度)
-        val output = Array(1) { Array(84) { FloatArray(8400) } }
+        // YOLOv8 输出：[1, 85, 8400] = 4坐标(cx,cy,w,h) + 1置信度 + 80类别
+        val output = Array(1) { Array(85) { FloatArray(8400) } }
         interp.run(imgData, output)
 
         // 后处理：提取 bounding box + NMS

@@ -1,0 +1,19 @@
+# Android
+*.iml
+.gradle/
+local.properties
+.DS_Store/
+/build/
+/captures/
+
+# Models (large binary, download separately)
+*.tflite
+
+# IDE
+.idea/
+*.ipr
+*.iws
+*.iml
+
+# Logs
+*.log
