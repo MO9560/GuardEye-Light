@@ -171,15 +171,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus() {
-        val modelLoaded = try {
-            java.io.File(filesDir, "yolov8n.tflite").exists()
-        } catch (e: Exception) { false }
+        val modelFile = java.io.File(filesDir, "uniform_detector.tflite")
+        val modelLoaded = modelFile.exists()
 
         tvStatus.text = buildString {
             append("状态：")
             append(if (Config.enabled) "✅ 运行中" else "❌ 已停止")
             append("\n模型：")
-            append(if (modelLoaded) "✅ YOLOv8n 已加载" else "⚠️ 未加载（首次启动自动下载）")
+            append(if (modelLoaded) "✅ uniform_detector 已加载" else "⚠️ 未加载（首次启动后自动从assets复制）")
             if (Config.chatId.isNotBlank()) {
                 append("\nChat ID：").append(Config.chatId)
             }
