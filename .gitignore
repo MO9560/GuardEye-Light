@@ -19,3 +19,6 @@ local.properties
 *.log
 app/build/
 local.properties
+
+# Keep model files in repo (required for release build)
+# *.tflite  <- commented out to include model in repo

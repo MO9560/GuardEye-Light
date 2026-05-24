@@ -14,11 +14,6 @@ import java.util.concurrent.TimeUnit
 
 object TelegramBot {
     private const val BASE_URL = "https://api.telegram.org"
-    private var _token: String = ""
-    private var _chatId: String = ""
-
-    val token: String get() = _token
-    val chatId: String get() = _chatId
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -26,16 +21,16 @@ object TelegramBot {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    fun configure(token: String, chatId: String) {
-        _token = token
-        _chatId = chatId
-    }
+    private fun getToken(): String = Config.botToken
+    private fun getChatId(): String = Config.chatId
 
     fun sendText(text: String): Boolean {
-        if (_token.isBlank() || _chatId.isBlank()) return false
+        val token = getToken()
+        val chatId = getChatId()
+        if (token.isBlank() || chatId.isBlank()) return false
         return try {
-            val url = "$BASE_URL/bot$_token/sendMessage"
-            val body = JSONObject().put("chat_id", _chatId).put("text", text)
+            val url = "$BASE_URL/bot$token/sendMessage"
+            val body = JSONObject().put("chat_id", chatId).put("text", text)
             val request = Request.Builder()
                 .url(url)
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -48,12 +43,14 @@ object TelegramBot {
     }
 
     fun sendPhoto(photoFile: File, caption: String = ""): Boolean {
-        if (_token.isBlank() || _chatId.isBlank()) return false
+        val token = getToken()
+        val chatId = getChatId()
+        if (token.isBlank() || chatId.isBlank()) return false
         return try {
-            val url = "$BASE_URL/bot$_token/sendPhoto"
+            val url = "$BASE_URL/bot$token/sendPhoto"
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("chat_id", _chatId)
+                .addFormDataPart("chat_id", chatId)
                 .addFormDataPart("photo", photoFile.name, photoFile.asRequestBody("image/jpeg".toMediaType()))
                 .apply { if (caption.isNotBlank()) addFormDataPart("caption", caption) }
                 .build()
@@ -66,15 +63,17 @@ object TelegramBot {
     }
 
     fun sendBitmap(bitmap: Bitmap, caption: String = ""): Boolean {
-        if (_token.isBlank() || _chatId.isBlank()) return false
+        val token = getToken()
+        val chatId = getChatId()
+        if (token.isBlank() || chatId.isBlank()) return false
         return try {
             val stream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
             val bytes = stream.toByteArray()
-            val url = "$BASE_URL/bot$_token/sendPhoto"
+            val url = "$BASE_URL/bot$token/sendPhoto"
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("chat_id", _chatId)
+                .addFormDataPart("chat_id", chatId)
                 .addFormDataPart("photo", "photo.jpg", bytes.toRequestBody("image/jpeg".toMediaType()))
                 .apply { if (caption.isNotBlank()) addFormDataPart("caption", caption) }
                 .build()
@@ -87,9 +86,10 @@ object TelegramBot {
     }
 
     fun getUpdates(offset: Long = 0): List<Update> {
-        if (_token.isBlank()) return emptyList()
+        val token = getToken()
+        if (token.isBlank()) return emptyList()
         return try {
-            val url = "$BASE_URL/bot$_token/getUpdates?offset=$offset&timeout=30"
+            val url = "$BASE_URL/bot$token/getUpdates?offset=$offset&timeout=30"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string() ?: "{}"
@@ -116,9 +116,10 @@ object TelegramBot {
     }
 
     fun getChatId(username: String): String? {
-        if (_token.isBlank()) return null
+        val token = getToken()
+        if (token.isBlank()) return null
         return try {
-            val url = "$BASE_URL/bot$_token/getUpdates"
+            val url = "$BASE_URL/bot$token/getUpdates"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
                 val json = JSONObject(response.body?.string() ?: "{}")

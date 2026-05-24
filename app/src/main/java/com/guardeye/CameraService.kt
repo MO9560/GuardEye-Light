@@ -85,6 +85,9 @@ class CameraService : LifecycleService() {
         // 启动 Bot 轮询
         startBotPolling()
 
+        // 发送启动欢迎信息
+        sendWelcomeMessage()
+
         // 启动定时拍照
         scheduleNextCapture()
     }
@@ -162,12 +165,10 @@ class CameraService : LifecycleService() {
     }
 
     private fun startBotPolling() {
-        if (Config.botToken.isBlank() || Config.chatId.isBlank()) {
-            android.util.Log.e("GuardEye", "Bot not started: token or chatId is blank")
-            TelegramBot.sendText("⚠️ GuardEye 启动失败：Token 或 Chat ID 未填写")
+        if (Config.botToken.isBlank()) {
+            android.util.Log.e("GuardEye", "Bot not started: token is blank")
             return
         }
-        TelegramBot.configure(Config.botToken, Config.chatId)
         android.util.Log.d("GuardEye", "Bot polling started. token=${Config.botToken.take(10)}... chatId=${Config.chatId}")
         pollJob = serviceScope.launch {
             while (isActive) {
@@ -175,8 +176,15 @@ class CameraService : LifecycleService() {
                     val updates = TelegramBot.getUpdates(lastOffset)
                     android.util.Log.d("GuardEye", "getUpdates returned ${updates.size} messages")
                     for (update in updates) {
-                        android.util.Log.d("GuardEye", "Command: ${update.text}")
+                        android.util.Log.d("GuardEye", "Command: ${update.text}, chatId=${update.chatId}")
                         lastOffset = update.messageId + 1L
+
+                        // 自动保存 chatId（如果未保存）
+                        if (Config.chatId.isBlank() && update.chatId.isNotBlank()) {
+                            Config.chatId = update.chatId
+                            android.util.Log.d("GuardEye", "Auto-saved chatId: ${update.chatId}")
+                        }
+
                         handleCommand(update.text)
                     }
                 } catch (e: Exception) {
@@ -185,6 +193,23 @@ class CameraService : LifecycleService() {
                 }
                 delay(3000)
             }
+        }
+    }
+
+    private fun sendWelcomeMessage() {
+        if (Config.botToken.isNotBlank() && Config.chatId.isNotBlank()) {
+            val welcomeText = """
+                🛡️ GuardEye 已启动
+
+                ✅ 监控服务已开启
+                📸 拍照间隔：${Config.intervalMinutes} 分钟
+                🔍 AI 识别：${if (Config.detectionEnabled) "开启" else "关闭"}
+
+                发送 /start 查看完整命令列表
+                发送 /photo 立即拍照
+                发送 /status 查看状态
+            """.trimIndent()
+            TelegramBot.sendText(welcomeText)
         }
     }
 
