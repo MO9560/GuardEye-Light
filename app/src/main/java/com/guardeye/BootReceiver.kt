@@ -7,11 +7,8 @@ import android.os.Build
 import android.util.Log
 
 /**
- * BootReceiver — 开机自启
- *
- * 如果开机前监控是开启的（Config.enabled = true），则启动：
- * 1. BotForegroundService — 确保 Bot 链路永远在线
- * 2. CameraService — 如果需要定时拍照
+ * Restores monitoring after device boot.
+ * Fires only if Config.enabled == true.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -20,60 +17,28 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.d(TAG, "Boot completed, Config.enabled=${Config.enabled}")
-            Config.init(ctx)
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        Log.d(TAG, "Boot completed")
 
-            if (!Config.enabled) {
-                Log.d(TAG, "Monitoring was disabled, not auto-starting")
-                return
-            }
+        Config.init(ctx)
 
-            // 先启动 Bot 服务（即使没有拍照，Bot 也应该在线）
-            startBotService(ctx)
-
-            // 然后启动相机服务
-            if (CameraService.isInstanceRunning || shouldStartCamera()) {
-                startCameraService(ctx)
-            }
+        if (!Config.enabled || !Config.isConfigured) {
+            Log.d(TAG, "GuardEye not enabled or not configured, skipping start")
+            return
         }
-    }
 
-    private fun shouldStartCamera(): Boolean {
-        // 如果需要定时拍照，启动相机服务
-        // 这里用 Config.enabled 作为判断
-        return Config.enabled
-    }
-
-    private fun startBotService(ctx: Context) {
-        try {
-            val svc = Intent(ctx, BotForegroundService::class.java).apply {
-                action = BotForegroundService.ACTION_START
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ctx.startForegroundService(svc)
-            } else {
-                ctx.startService(svc)
-            }
-            Log.d(TAG, "BotForegroundService started on boot")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start BotForegroundService: ${e.message}")
+        // Restart BotService
+        val botIntent = Intent(ctx, BotService::class.java).apply {
+            action = BotService.ACTION_START
         }
-    }
-
-    private fun startCameraService(ctx: Context) {
-        try {
-            val svc = Intent(ctx, CameraService::class.java).apply {
-                action = CameraService.ACTION_START
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ctx.startForegroundService(svc)
-            } else {
-                ctx.startService(svc)
-            }
-            Log.d(TAG, "CameraService started on boot")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start CameraService: ${e.message}")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ctx.startForegroundService(botIntent)
+        } else {
+            ctx.startService(botIntent)
         }
+
+        // Restart alarm schedule
+        AlarmReceiver.scheduleAlarm(ctx, Config.intervalMinutes)
+        Log.i(TAG, "GuardEye restored after boot")
     }
 }

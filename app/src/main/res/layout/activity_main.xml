@@ -9,9 +9,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:spacing="12dp">
+        android:spacing="10dp">
 
-        <!-- Title Row -->
+        <!-- Title -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -22,8 +22,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="🛡️ GuardEye"
-                android:textSize="28sp"
+                android:text="🛡️ GuardEye v3.0"
+                android:textSize="26sp"
                 android:textColor="@color/on_background"
                 android:textStyle="bold" />
 
@@ -36,25 +36,21 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Subtitle -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="安卓监控拍照 · AI 识别 · Telegram 告警"
-            android:textSize="13sp"
+            android:text="安卓监控 · AI 识别 · Telegram 告警"
+            android:textSize="12sp"
             android:textColor="@color/text_secondary" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#2A2A2A" />
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#2A2A2A" />
 
-        <!-- Bot Status Card -->
+        <!-- Bot Status -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp"
+            android:padding="10dp"
             android:background="@drawable/edit_bg">
 
             <TextView
@@ -62,7 +58,7 @@
                 android:layout_height="wrap_content"
                 android:text="🤖 Bot 状态"
                 android:textColor="@color/on_background"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -71,8 +67,8 @@
                 android:layout_height="wrap_content"
                 android:text="🔴 Bot 未启动"
                 android:textColor="@color/red"
-                android:textSize="15sp"
-                android:layout_marginTop="4dp" />
+                android:textSize="14sp"
+                android:layout_marginTop="2dp" />
         </LinearLayout>
 
         <!-- Bot Token -->
@@ -81,17 +77,17 @@
             android:layout_height="wrap_content"
             android:text="Bot Token"
             android:textColor="@color/on_background"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
 
         <EditText
             android:id="@+id/etBotToken"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="8716629759:xxx"
+            android:hint="123456789:ABCdef..."
             android:textColor="@color/on_background"
             android:textColorHint="#666"
             android:background="@drawable/edit_bg"
-            android:padding="12dp"
+            android:padding="10dp"
             android:inputType="text" />
 
         <!-- Chat ID -->
@@ -100,8 +96,8 @@
             android:layout_height="wrap_content"
             android:text="Chat ID"
             android:textColor="@color/on_background"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp" />
+            android:textSize="13sp"
+            android:layout_marginTop="2dp" />
 
         <EditText
             android:id="@+id/etChatId"
@@ -111,17 +107,17 @@
             android:textColor="@color/on_background"
             android:textColorHint="#666"
             android:background="@drawable/edit_bg"
-            android:padding="12dp"
+            android:padding="10dp"
             android:inputType="text" />
 
-        <!-- Interval -->
+        <!-- Interval Slider -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="拍摄间隔"
             android:textColor="@color/on_background"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp" />
+            android:textSize="13sp"
+            android:layout_marginTop="2dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -141,11 +137,11 @@
 
             <TextView
                 android:id="@+id/tvInterval"
-                android:layout_width="60dp"
+                android:layout_width="56dp"
                 android:layout_height="wrap_content"
                 android:text="5 分钟"
                 android:textColor="@color/primary"
-                android:textSize="16sp"
+                android:textSize="15sp"
                 android:gravity="end" />
         </LinearLayout>
 
@@ -154,7 +150,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="4dp">
+            android:gravity="center_vertical">
 
             <TextView
                 android:layout_width="0dp"
@@ -162,7 +158,7 @@
                 android:layout_weight="1"
                 android:text="AI 识别"
                 android:textColor="@color/on_background"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
 
             <Switch
                 android:id="@+id/switchDetection"
@@ -177,22 +173,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="4dp">
+            android:gravity="center_vertical">
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="开启监控"
+                android:text="调试模式"
                 android:textColor="@color/on_background"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
 
             <Switch
-                android:id="@+id/switchEnabled"
+                android:id="@+id/switchDebug"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:thumbTint="@color/green"
-                android:trackTint="#1B5E20" />
+                android:checked="true"
+                android:thumbTint="#FF9800"
+                android:trackTint="#E65100" />
         </LinearLayout>
 
         <!-- Buttons -->
@@ -201,7 +198,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="💾 保存配置"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="6dp"
             android:backgroundTint="@color/primary" />
 
         <Button
@@ -212,28 +209,37 @@
             android:backgroundTint="@color/accent"
             android:textColor="#000" />
 
-        <!-- Status Panel -->
+        <!-- ── Debug Panel ── -->
         <TextView
-            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🐛 调试面板"
+            android:textColor="#FF9800"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tvDebug"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="状态：未启动"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
-            android:layout_marginTop="8dp"
+            android:text="Bot: 未启动\nCameraX: 未初始化\n模型: 未加载\nJVM: —\n电量: —"
+            android:textColor="#BDBDBD"
+            android:textSize="11sp"
             android:fontFamily="monospace"
             android:padding="8dp"
-            android:background="@drawable/edit_bg" />
+            android:background="@drawable/edit_bg"
+            android:lineSpacingExtra="2dp" />
 
-        <!-- Help -->
+        <!-- Bot Commands Reference -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📋 Bot 指令\n/start - 开启监控\n/stop - 停止监控\n/photo - 立即拍照\n/status - 状态报告\n/interval N - 设置间隔\n/detect on/off - AI 识别开关\n/health - 健康检查\n/test - 测试连接"
+            android:text="📋 Bot 指令\n/start · /stop · /photo · /status\n/interval N · /detect on/off · /debug on/off · /test"
             android:textColor="@color/text_secondary"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:fontFamily="monospace"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="4dp" />
 
     </LinearLayout>
 </ScrollView>

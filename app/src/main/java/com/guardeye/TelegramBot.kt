@@ -1,145 +1,131 @@
 package com.guardeye
 
-import android.graphics.Bitmap
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
+/**
+ * Stateless Telegram Bot utility.
+ * All methods are blocking — call from a background thread.
+ */
 object TelegramBot {
-    private const val BASE_URL = "https://api.telegram.org"
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private fun getToken(): String = Config.botToken
-    private fun getChatId(): String = Config.chatId
+    private val JSON = "application/json; charset=utf-8".toMediaType()
 
-    fun sendText(text: String): Boolean {
-        val token = getToken()
-        val chatId = getChatId()
-        if (token.isBlank() || chatId.isBlank()) return false
+    // ── Send text ────────────────────────────────────────────────
+
+    fun sendText(token: String, chatId: String, text: String): Result<Unit> {
         return try {
-            val url = "$BASE_URL/bot$token/sendMessage"
-            val body = JSONObject().put("chat_id", chatId).put("text", text)
-            val request = Request.Builder()
-                .url(url)
-                .post(body.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-            client.newCall(request).execute().use { it.code == 200 }
+            val body = JSONObject()
+                .put("chat_id", chatId)
+                .put("text", text)
+                .put("parse_mode", "Markdown")
+                .toString()
+                .toRequestBody(JSON)
+                .let { api("sendMessage", token, it) }
+                .use { it.body?.string() ?: "" }
+            if (JSONObject(body).getBoolean("ok")) Result.success(Unit)
+            else Result.failure(Exception("sendText failed: $body"))
         } catch (e: Exception) {
-            e.printStackTrace()
-            false
+            Result.failure(e)
         }
     }
 
-    fun sendPhoto(photoFile: File, caption: String = ""): Boolean {
-        val token = getToken()
-        val chatId = getChatId()
-        if (token.isBlank() || chatId.isBlank()) return false
+    // ── Send photo via URL upload ────────────────────────────────
+    // Telegram Bot API: POST to /bot{token}/sendPhoto with multipart/form-data
+
+    fun sendPhoto(token: String, chatId: String, photoBytes: ByteArray, caption: String? = null): Result<Unit> {
         return try {
-            val url = "$BASE_URL/bot$token/sendPhoto"
-            val requestBody = MultipartBody.Builder()
+            val boundary = "GuardEyeBoundary_${System.currentTimeMillis()}"
+            val multipartBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "photo",
+                    "photo.jpg",
+                    photoBytes.toRequestBody("image/jpeg".toMediaType())
+                )
                 .addFormDataPart("chat_id", chatId)
-                .addFormDataPart("photo", photoFile.name, photoFile.asRequestBody("image/jpeg".toMediaType()))
-                .apply { if (caption.isNotBlank()) addFormDataPart("caption", caption) }
+                .addFormDataPart("parse_mode", "Markdown")
+                .apply { caption?.let { addFormDataPart("caption", it) } }
                 .build()
-            val request = Request.Builder().url(url).post(requestBody).build()
-            client.newCall(request).execute().use { it.code == 200 }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
 
-    fun sendBitmap(bitmap: Bitmap, caption: String = ""): Boolean {
-        val token = getToken()
-        val chatId = getChatId()
-        if (token.isBlank() || chatId.isBlank()) return false
-        return try {
-            val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
-            val bytes = stream.toByteArray()
-            val url = "$BASE_URL/bot$token/sendPhoto"
-            val requestBody = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("chat_id", chatId)
-                .addFormDataPart("photo", "photo.jpg", bytes.toRequestBody("image/jpeg".toMediaType()))
-                .apply { if (caption.isNotBlank()) addFormDataPart("caption", caption) }
+            val req = Request.Builder()
+                .url("https://api.telegram.org/bot$token/sendPhoto")
+                .post(multipartBody)
                 .build()
-            val request = Request.Builder().url(url).post(requestBody).build()
-            client.newCall(request).execute().use { it.code == 200 }
+
+            val resp = client.newCall(req).execute()
+            val respBody = resp.body?.string() ?: ""
+            resp.close()
+
+            val json = JSONObject(respBody)
+            if (json.getBoolean("ok")) Result.success(Unit)
+            else Result.failure(Exception("sendPhoto failed: $respBody"))
         } catch (e: Exception) {
-            e.printStackTrace()
-            false
+            Result.failure(e)
         }
     }
 
-    fun getUpdates(offset: Long = 0): List<Update> {
-        val token = getToken()
-        if (token.isBlank()) return emptyList()
+    // ── Long-poll for updates ───────────────────────────────────
+
+    fun fetchUpdates(token: String, offset: Long, timeoutSec: Int = 30): Result<List<Update>> {
         return try {
-            val url = "$BASE_URL/bot$token/getUpdates?offset=$offset&timeout=30"
-            val request = Request.Builder().url(url).get().build()
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string() ?: "{}"
-                android.util.Log.d("GuardEye", "getUpdates response: ${body.take(500)}")
-                val json = JSONObject(body)
-                val result = json.optJSONArray("result") ?: JSONArray()
-                val updates = mutableListOf<Update>()
-                for (i in 0 until result.length()) {
-                    val obj = result.getJSONObject(i)
-                    val updateId = obj.optLong("update_id", 0L)
-                    val msg = obj.optJSONObject("message") ?: continue
-                    val text = msg.optString("text", "")
-                    val chatObj = msg.optJSONObject("chat")
-                    val chatIdFrom = chatObj?.optLong("id", 0L)?.toString() ?: ""
-                    updates.add(Update(text, chatIdFrom, updateId))
-                }
-                updates
+            val body = JSONObject()
+                .put("offset", offset)
+                .put("timeout", timeoutSec)
+                .toString()
+                .toRequestBody(JSON)
+                .let { api("getUpdates", token, it) }
+                .use { it.body?.string() ?: "" }
+
+            val root = JSONObject(body)
+            if (!root.getBoolean("ok")) return Result.failure(Exception("fetchUpdates: $body"))
+
+            val result = root.getJSONArray("result")
+            val updates = mutableListOf<Update>()
+            for (i in 0 until result.length()) {
+                updates.add(Update.fromJson(result.getJSONObject(i)))
             }
+            Result.success(updates)
         } catch (e: Exception) {
-            android.util.Log.e("GuardEye", "getUpdates error: ${e.message}", e)
-            e.printStackTrace()
-            emptyList()
+            Result.failure(e)
         }
     }
 
-    fun getChatId(username: String): String? {
-        val token = getToken()
-        if (token.isBlank()) return null
-        return try {
-            val url = "$BASE_URL/bot$token/getUpdates"
-            val request = Request.Builder().url(url).get().build()
-            client.newCall(request).execute().use { response ->
-                val json = JSONObject(response.body?.string() ?: "{}")
-                val result = json.optJSONArray("result") ?: JSONArray()
-                for (i in 0 until result.length()) {
-                    val obj = result.getJSONObject(i)
-                    val msg = obj.optJSONObject("message") ?: continue
-                    val from = msg.optJSONObject("from") ?: continue
-                    val uname = from.optString("username", "")
-                    if (uname == username) {
-                        return@use from.optString("id", "")
-                    }
-                }
-                null
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
+    // ── Internal ───────────────────────────────────────────────
+
+    private fun api(method: String, token: String, body: RequestBody): Response {
+        val req = Request.Builder()
+            .url("https://api.telegram.org/bot$token/$method")
+            .post(body)
+            .build()
+        return client.newCall(req).execute()
     }
 
-    data class Update(val text: String, val chatId: String, val messageId: Long)
+    // ── Data model ──────────────────────────────────────────────
+
+    data class Update(
+        val updateId: Long,
+        val chatId: String,
+        val text: String
+    ) {
+        companion object {
+            fun fromJson(obj: JSONObject): Update {
+                val msg = obj.getJSONObject("message")
+                return Update(
+                    updateId = obj.getLong("update_id"),
+                    chatId = msg.getJSONObject("chat").getString("id"),
+                    text = msg.optString("text", "")
+                )
+            }
+        }
+    }
 }
