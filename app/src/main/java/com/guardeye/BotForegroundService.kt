@@ -46,6 +46,10 @@ class BotForegroundService : LifecycleService(), BotStatusListener {
         // 相机服务是否在运行（用于状态查询）
         var isCameraServiceRunning = false
             private set
+
+        fun setCameraServiceRunning(running: Boolean) {
+            isCameraServiceRunning = running
+        }
     }
 
     private var isRunning = false

@@ -2,6 +2,7 @@ package com.guardeye
 
 import android.app.*
 import android.content.Context
+import android.graphics.Bitmap
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
@@ -314,6 +315,15 @@ object BotManager {
             Log.e(TAG, "sendPhoto error: ${e.message}")
             false
         }
+    }
+
+    /**
+     * 发送 Bitmap（内部转换为字节后发送）
+     */
+    fun sendBitmap(bitmap: Bitmap, caption: String = ""): Boolean {
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+        return sendPhoto(stream.toByteArray(), caption)
     }
 
     /**

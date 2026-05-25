@@ -82,7 +82,7 @@ class CameraService : LifecycleService() {
     private fun startMonitoring() {
         if (isMonitoring) return
         isMonitoring = true
-        BotForegroundService.isCameraServiceRunning = true
+        BotForegroundService.setCameraServiceRunning(true)
 
         val notification = buildNotification("GuardEye 监控已开启")
         startForeground(NOTIFICATION_ID, notification)
@@ -243,7 +243,7 @@ class CameraService : LifecycleService() {
                 FileOutputStream(photoFile).use { fos ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
                 }
-                BotManager.sendPhoto(photoFile, "📸 GuardEye 实时画面")
+                BotManager.sendPhoto(photoFile.readBytes(), "📸 GuardEye 实时画面")
             }
 
             // 重新排程下次拍照
@@ -335,7 +335,7 @@ class CameraService : LifecycleService() {
 
     override fun onDestroy() {
         isInstanceRunning = false
-        BotForegroundService.isCameraServiceRunning = false
+        BotForegroundService.setCameraServiceRunning(false)
         serviceScope.cancel()
         cameraExecutor.shutdown()
         super.onDestroy()
