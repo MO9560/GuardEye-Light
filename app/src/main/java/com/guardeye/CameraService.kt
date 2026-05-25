@@ -130,7 +130,7 @@ class CameraService : LifecycleService() {
     private fun stopMonitoring() {
         isMonitoring = false
         isModelReady = false
-        BotForegroundService.isCameraServiceRunning = false
+        BotForegroundService.setCameraServiceRunning(false)
         detector?.close()
         detector = null
         cameraInitialized = false

@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -318,12 +319,10 @@ object BotManager {
     }
 
     /**
-     * 发送 Bitmap（内部转换为字节后发送）
+     * 发送 Bitmap 字节（CameraService annotatedToBytes 的结果直接用这个）
      */
-    fun sendBitmap(bitmap: Bitmap, caption: String = ""): Boolean {
-        val stream = java.io.ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-        return sendPhoto(stream.toByteArray(), caption)
+    fun sendBitmap(photoBytes: ByteArray, caption: String = ""): Boolean {
+        return sendPhoto(photoBytes, caption)
     }
 
     /**
