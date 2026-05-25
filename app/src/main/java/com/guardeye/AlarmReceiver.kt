@@ -3,24 +3,19 @@ package com.guardeye
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        // 触发定时拍照
+        Config.init(ctx)
+        // 触发定时拍照（不会重新启动整个服务，避免双重初始化）
         val svc = Intent(ctx, CameraService::class.java).apply {
             action = CameraService.ACTION_CAPTURE
         }
-        ctx.startService(svc)
-
-        // 重新调度下一次
-        Config.init(ctx)
-        val svc2 = Intent(ctx, CameraService::class.java).apply {
-            action = CameraService.ACTION_START
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            ctx.startForegroundService(svc2)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ctx.startForegroundService(svc)
         } else {
-            ctx.startService(svc2)
+            ctx.startService(svc)
         }
     }
 }

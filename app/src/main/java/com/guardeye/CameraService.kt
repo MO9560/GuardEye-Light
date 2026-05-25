@@ -35,6 +35,7 @@ class CameraService : LifecycleService() {
     private var pollJob: Job? = null
     private var alarmReceiver: AlarmReceiver? = null
     private var lastOffset = 0L
+    private var isMonitoring = false
 
     // CameraX
     private var imageCapture: ImageCapture? = null
@@ -58,16 +59,24 @@ class CameraService : LifecycleService() {
     }
 
     private fun startMonitoring() {
+        if (isMonitoring) return
+        isMonitoring = true
+
         val notification = buildNotification("GuardEye 监控已开启")
         startForeground(NOTIFICATION_ID, notification)
 
         // 复制 assets 中的模型到内部存储（首次）
         val modelFile = File(filesDir, "yolov8n.tflite")
         if (!modelFile.exists()) {
-            assets.open("yolov8n.tflite").use { input ->
-                modelFile.outputStream().use { output ->
-                    input.copyTo(output)
+            try {
+                assets.open("yolov8n.tflite").use { input ->
+                    modelFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                android.util.Log.d("GuardEye", "Model copied to ${modelFile.absolutePath}, size=${modelFile.length()}")
+            } catch (e: Exception) {
+                android.util.Log.e("GuardEye", "Failed to copy model: ${e.message}", e)
             }
         }
 
@@ -75,12 +84,20 @@ class CameraService : LifecycleService() {
         if (modelFile.exists()) {
             detector = Detector(modelFile.absolutePath)
             if (!detector!!.load()) {
+                android.util.Log.e("GuardEye", "Model load() returned false")
                 detector = null
+            } else {
+                android.util.Log.d("GuardEye", "Model loaded successfully")
             }
+        } else {
+            android.util.Log.e("GuardEye", "Model file not found: ${modelFile.absolutePath}")
         }
 
         // 初始化 CameraX
         initCamera()
+
+        // 读取持久化的 offset
+        lastOffset = Config.botOffset
 
         // 启动 Bot 轮询
         startBotPolling()
@@ -93,7 +110,9 @@ class CameraService : LifecycleService() {
     }
 
     private fun stopMonitoring() {
+        isMonitoring = false
         pollJob?.cancel()
+        pollJob = null
         alarmReceiver = null
         detector?.close()
         detector = null
@@ -178,6 +197,7 @@ class CameraService : LifecycleService() {
                     for (update in updates) {
                         android.util.Log.d("GuardEye", "Command: ${update.text}, chatId=${update.chatId}")
                         lastOffset = update.messageId + 1L
+                        Config.botOffset = lastOffset
 
                         // 自动保存 chatId（如果未保存）
                         if (Config.chatId.isBlank() && update.chatId.isNotBlank()) {

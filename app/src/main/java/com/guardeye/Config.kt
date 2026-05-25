@@ -39,4 +39,8 @@ object Config {
 
     val isConfigured: Boolean
         get() = botToken.isNotBlank() && chatId.isNotBlank()
+
+    var botOffset: Long
+        get() = prefs.getLong("bot_offset", 0L)
+        set(v) = prefs.edit().putLong("bot_offset", v).apply()
 }
