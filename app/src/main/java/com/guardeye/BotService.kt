@@ -57,8 +57,8 @@ class BotService : LifecycleService() {
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onDestroy() {
-        pollingJob?.cancel()
-        cmdScope.cancel()
+        pollingJob?.cancel()       // 只取消轮询循环
+        // cmdScope.cancel() 先注释掉，让正在处理的命令完成（先跑通再优化）
         isRunning = false
         Log.d(TAG, "BotService destroyed")
         super.onDestroy()
@@ -73,10 +73,13 @@ class BotService : LifecycleService() {
         }
         isRunning = true
         startForeground(NOTIFICATION_ID, buildNotification("🔗 GuardEye Bot 启动中..."))
-        pollingJob = lifecycleScope.launch {
+        // 用 cmdScope 启动轮询，避免 lifecycleScope 被取消时轮询停止
+        pollingJob = cmdScope.launch {
+            Log.d(TAG, "Polling loop started, isActive=${isActive}")
             while (isActive && isRunning) {
                 val token = Config.botToken
                 val chatId = Config.chatId
+                Log.d(TAG, "Polling... token=${token.take(10)}..., chatId=$chatId, offset=${Config.botOffset}")
                 if (token.isBlank() || chatId.isBlank()) {
                     updateNotification("⚠️ 未配置 Token 或 Chat ID")
                     delay(10_000)
@@ -84,20 +87,23 @@ class BotService : LifecycleService() {
                 }
                 val result = TelegramBot.fetchUpdates(token, Config.botOffset)
                 result.onSuccess { updates ->
+                    Log.d(TAG, "Received ${updates.size} updates")
                     if (updates.isNotEmpty()) updateNotification("📨 ${updates.size} 条新消息")
                     updates.forEach { update ->
                         Config.botOffset = update.updateId + 1
                         // Use NonCancellable so commands finish even if lifecycle shuts down
                         cmdScope.launch(NonCancellable) {
+                            Log.d(TAG, "Handling command: ${update.text}")
                             handleCommand(update.text, update.chatId)
                         }
                     }
                 }
                 result.onFailure {
-                    Log.w(TAG, "Poll error: ${it.message}")
+                    Log.e(TAG, "Poll error: ${it.message}")  // 改用 e，方便排查
                 }
                 delay(500)
             }
+            Log.d(TAG, "Polling loop ended")
         }
         updateNotification("✅ Bot 已连接")
         Log.i(TAG, "Polling started")
