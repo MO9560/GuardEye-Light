@@ -58,6 +58,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         Log.d(TAG, "Alarm triggered")
+        Config.init(ctx)  // init Config in this process before use
         if (!Config.enabled) {
             Log.d(TAG, "Config.enabled=false, skipping capture")
             return

@@ -2,17 +2,18 @@ package com.guardeye
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/**
- * YOLOv8n detector using TensorFlow Lite.
- * Thread-safe — runs on a dedicated background thread.
- */
 class Detector(private val context: Context) {
+
+    companion object {
+        private const val TAG = "GuardEye.Detector"
+    }
 
     // Confidence threshold for reporting a detection
     var threshold: Float = 0.5f
@@ -48,21 +49,25 @@ class Detector(private val context: Context) {
         return try {
             val modelFile = File(context.filesDir, "yolov8n.tflite")
             if (!modelFile.exists()) {
-                // Copy from assets
+                Log.d(TAG, "Model not in filesDir, copying from assets...")
                 context.assets.open("yolov8n.tflite").use { input ->
                     modelFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
+                Log.d(TAG, "Model copied, size: ${modelFile.length()} bytes")
+            } else {
+                Log.d(TAG, "Model found: ${modelFile.length()} bytes")
             }
             val options = Interpreter.Options().apply {
                 numThreads = 4
             }
             interpreter = Interpreter(modelFile, options)
             isReady = true
+            Log.d(TAG, "Detector ready")
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Detector load FAILED: ${e.message}", e)
             false
         }
     }
@@ -95,11 +100,9 @@ class Detector(private val context: Context) {
 
         // Parse outputs (numDetections, label, confidence)
         val results = mutableListOf<Pair<String, Float>>()
-        // Each of the 8400 columns: [x, y, w, h, class0_score, class1_score, ...]
         for (i in 0 until 8400) {
             var maxConf = 0f
             var bestClass = 0
-            // Classes start at index 4
             for (c in 0 until 80) {
                 val score = outputBuffer[0][4 + c][i]
                 if (score > maxConf) {
@@ -111,9 +114,9 @@ class Detector(private val context: Context) {
                 results.add(cocoNames[bestClass] to maxConf)
             }
         }
-
-        // Sort by confidence descending
-        return results.sortedByDescending { it.second }
+        val sorted = results.sortedByDescending { it.second }
+        Log.d(TAG, "Detection: ${sorted.size} objects found — ${sorted.take(3)}")
+        return sorted
     }
 
     /** Returns true if any detection is an alert-worthy class */

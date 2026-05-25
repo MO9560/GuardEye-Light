@@ -4,9 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -35,7 +33,8 @@ class BotService : LifecycleService() {
 
     private var isRunning = false
     private var pollingJob: Job? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
+    /** Dedicated scope for command handlers — survives service lifecycle */
+    private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -49,7 +48,7 @@ class BotService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_START -> startPolling()
-            ACTION_STOP  -> stopSelf()
+            ACTION_STOP  -> { isRunning = false; stopSelf() }
         }
         return START_STICKY
     }
@@ -58,6 +57,7 @@ class BotService : LifecycleService() {
 
     override fun onDestroy() {
         pollingJob?.cancel()
+        cmdScope.cancel()
         isRunning = false
         Log.d(TAG, "BotService destroyed")
         super.onDestroy()
@@ -77,14 +77,17 @@ class BotService : LifecycleService() {
                 val token = Config.botToken
                 val chatId = Config.chatId
                 if (token.isBlank() || chatId.isBlank()) {
+                    updateNotification("⚠️ 未配置 Token 或 Chat ID")
                     delay(10_000)
                     continue
                 }
                 val result = TelegramBot.fetchUpdates(token, Config.botOffset)
                 result.onSuccess { updates ->
+                    if (updates.isNotEmpty()) updateNotification("📨 ${updates.size} 条新消息")
                     updates.forEach { update ->
                         Config.botOffset = update.updateId + 1
-                        lifecycleScope.launch(Dispatchers.IO) {
+                        // Use NonCancellable so commands finish even if lifecycle shuts down
+                        cmdScope.launch(NonCancellable) {
                             handleCommand(update.text, update.chatId)
                         }
                     }
@@ -92,7 +95,7 @@ class BotService : LifecycleService() {
                 result.onFailure {
                     Log.w(TAG, "Poll error: ${it.message}")
                 }
-                delay(500) // gentle back-off on failure
+                delay(500)
             }
         }
         updateNotification("✅ Bot 已连接")
