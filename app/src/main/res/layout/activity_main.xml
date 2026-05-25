@@ -9,28 +9,71 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:spacing="16dp">
+        android:spacing="12dp">
 
-        <!-- Title -->
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Title Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🛡️ GuardEye"
-            android:textSize="28sp"
-            android:textColor="@color/on_background"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🛡️ GuardEye"
+                android:textSize="28sp"
+                android:textColor="@color/on_background"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="v1.0"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Subtitle -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="安卓监控拍照 · AI 识别 · Telegram 告警"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textColor="@color/text_secondary" />
 
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#333" />
+            android:background="#2A2A2A" />
+
+        <!-- Bot Status Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:background="@drawable/edit_bg">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🤖 Bot 状态"
+                android:textColor="@color/on_background"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvBotStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔴 Bot 未启动"
+                android:textColor="@color/red"
+                android:textSize="15sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
 
         <!-- Bot Token -->
         <TextView
@@ -58,27 +101,27 @@
             android:text="Chat ID"
             android:textColor="@color/on_background"
             android:textSize="14sp"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="4dp" />
 
         <EditText
             android:id="@+id/etChatId"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="你的 Telegram ID 或 @username"
+            android:hint="8773857995"
             android:textColor="@color/on_background"
             android:textColorHint="#666"
             android:background="@drawable/edit_bg"
             android:padding="12dp"
             android:inputType="text" />
 
-        <!-- Interval Slider -->
+        <!-- Interval -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="拍摄间隔"
             android:textColor="@color/on_background"
             android:textSize="14sp"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="4dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -111,7 +154,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="4dp">
 
             <TextView
                 android:layout_width="0dp"
@@ -158,7 +201,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="💾 保存配置"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:backgroundTint="@color/primary" />
 
         <Button
@@ -169,7 +212,7 @@
             android:backgroundTint="@color/accent"
             android:textColor="#000" />
 
-        <!-- Status -->
+        <!-- Status Panel -->
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
@@ -178,17 +221,19 @@
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
             android:layout_marginTop="8dp"
-            android:fontFamily="monospace" />
+            android:fontFamily="monospace"
+            android:padding="8dp"
+            android:background="@drawable/edit_bg" />
 
         <!-- Help -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📋 Bot 指令\n/start - 开启\n/stop - 停止\n/photo - 立即拍照\n/status - 状态\n/interval N - 设置间隔\n/detect on/off - 开关识别"
+            android:text="📋 Bot 指令\n/start - 开启监控\n/stop - 停止监控\n/photo - 立即拍照\n/status - 状态报告\n/interval N - 设置间隔\n/detect on/off - AI 识别开关\n/health - 健康检查\n/test - 测试连接"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
             android:fontFamily="monospace"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="8dp" />
 
     </LinearLayout>
 </ScrollView>

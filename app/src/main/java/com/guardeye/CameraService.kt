@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.os.*
-import android.os.BatteryManager
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
@@ -13,12 +12,25 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import com.guardeye.Detector
+import com.guardeye.BotManager
+import com.guardeye.BotManager.NotifyLevel
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
 
+/**
+ * CameraService — 相机监控服务
+ *
+ * 职责：
+ * - CameraX 相机初始化与管理
+ * - YOLOv8n 目标检测（TensorFlow Lite）
+ * - 定时拍照 + AlarmManager 调度
+ * - 状态变更 → BotManager 推送 Telegram 通知
+ *
+ * Bot 通信完全由 BotManager/BotForegroundService 处理，
+ * CameraService 不负责任何网络通信。
+ */
 class CameraService : LifecycleService() {
 
     companion object {
@@ -27,25 +39,34 @@ class CameraService : LifecycleService() {
         const val ACTION_START = "com.guardeye.action.START"
         const val ACTION_STOP = "com.guardeye.action.STOP"
         const val ACTION_CAPTURE = "com.guardeye.action.CAPTURE"
+
+        // 供 BotForegroundService 查询相机是否在运行
+        @Volatile var isInstanceRunning = false
+            private set
     }
 
     private val vibrator: Vibrator? by lazy { getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
     private var detector: Detector? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var pollJob: Job? = null
-    private var alarmReceiver: AlarmReceiver? = null
-    private var lastOffset = 0L
-    private var isMonitoring = false
 
     // CameraX
     private var imageCapture: ImageCapture? = null
     private var cameraInitialized = false
+    private var isMonitoring = false
     private val cameraExecutor = Executors.newSingleThreadExecutor()
+
+    // 模型加载状态（供 BotForegroundService 查询）
+    var isModelReady = false
+        private set
 
     override fun onCreate() {
         super.onCreate()
         Config.init(this)
         createNotificationChannel()
+        isInstanceRunning = true
+        BotManager.setToken(Config.botToken)
+        BotManager.setChatId(Config.chatId)
+        BotManager.notifyStatus("CameraService 启动", "模型加载中...", NotifyLevel.INFO)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -61,6 +82,7 @@ class CameraService : LifecycleService() {
     private fun startMonitoring() {
         if (isMonitoring) return
         isMonitoring = true
+        BotForegroundService.isCameraServiceRunning = true
 
         val notification = buildNotification("GuardEye 监控已开启")
         startForeground(NOTIFICATION_ID, notification)
@@ -74,9 +96,10 @@ class CameraService : LifecycleService() {
                         input.copyTo(output)
                     }
                 }
-                android.util.Log.d("GuardEye", "Model copied to ${modelFile.absolutePath}, size=${modelFile.length()}")
+                android.util.Log.d("GuardEye", "Model copied: ${modelFile.length()} bytes")
             } catch (e: Exception) {
                 android.util.Log.e("GuardEye", "Failed to copy model: ${e.message}", e)
+                BotManager.notifyStatus("模型复制失败", "${e.message}", NotifyLevel.WARN)
             }
         }
 
@@ -85,39 +108,34 @@ class CameraService : LifecycleService() {
             detector = Detector(modelFile.absolutePath)
             if (!detector!!.load()) {
                 android.util.Log.e("GuardEye", "Model load() returned false")
+                BotManager.notifyStatus("模型加载失败", "load() 返回 false", NotifyLevel.WARN)
                 detector = null
+                isModelReady = false
             } else {
                 android.util.Log.d("GuardEye", "Model loaded successfully")
+                isModelReady = true
+                BotManager.notifyStatus("✅ 模型加载成功", "yolov8n.tflite 已就绪", NotifyLevel.SUCCESS)
             }
         } else {
             android.util.Log.e("GuardEye", "Model file not found: ${modelFile.absolutePath}")
+            isModelReady = false
+            BotManager.notifyStatus("模型文件不存在", modelFile.absolutePath, NotifyLevel.WARN)
         }
 
         // 初始化 CameraX
         initCamera()
-
-        // 读取持久化的 offset
-        lastOffset = Config.botOffset
-
-        // 启动 Bot 轮询
-        startBotPolling()
-
-        // 发送启动欢迎信息
-        sendWelcomeMessage()
-
-        // 启动定时拍照
         scheduleNextCapture()
     }
 
     private fun stopMonitoring() {
         isMonitoring = false
-        pollJob?.cancel()
-        pollJob = null
-        alarmReceiver = null
+        isModelReady = false
+        BotForegroundService.isCameraServiceRunning = false
         detector?.close()
         detector = null
         cameraInitialized = false
         cameraExecutor.shutdown()
+        BotManager.notifyStatus("相机服务已停止", "CameraService stopped", NotifyLevel.INFO)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -131,8 +149,7 @@ class CameraService : LifecycleService() {
             description = getString(R.string.channel_desc)
             setShowBadge(false)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(text: String): Notification {
@@ -154,6 +171,7 @@ class CameraService : LifecycleService() {
         val pi = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarm.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerTime, pi)
+        android.util.Log.d("GuardEye", "Next capture scheduled in ${Config.intervalMinutes} min")
     }
 
     private fun initCamera() {
@@ -176,119 +194,24 @@ class CameraService : LifecycleService() {
                     imageCapture
                 )
                 cameraInitialized = true
+                BotManager.notifyStatus("📸 相机初始化成功", "CameraX ready", NotifyLevel.SUCCESS)
                 android.util.Log.d("GuardEye", "CameraX initialized")
             } catch (e: Exception) {
                 android.util.Log.e("GuardEye", "CameraX init failed: ${e.message}", e)
+                BotManager.notifyStatus("相机初始化失败", "${e.message}", NotifyLevel.WARN)
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun startBotPolling() {
-        if (Config.botToken.isBlank()) {
-            android.util.Log.e("GuardEye", "Bot not started: token is blank")
-            return
-        }
-        android.util.Log.d("GuardEye", "Bot polling started. token=${Config.botToken.take(10)}... chatId=${Config.chatId}")
-        pollJob = serviceScope.launch {
-            while (isActive) {
-                try {
-                    val updates = TelegramBot.getUpdates(lastOffset)
-                    android.util.Log.d("GuardEye", "getUpdates returned ${updates.size} messages")
-                    for (update in updates) {
-                        android.util.Log.d("GuardEye", "Command: ${update.text}, chatId=${update.chatId}")
-                        lastOffset = update.messageId + 1L
-                        Config.botOffset = lastOffset
-
-                        // 自动保存 chatId（如果未保存）
-                        if (Config.chatId.isBlank() && update.chatId.isNotBlank()) {
-                            Config.chatId = update.chatId
-                            android.util.Log.d("GuardEye", "Auto-saved chatId: ${update.chatId}")
-                        }
-
-                        handleCommand(update.text)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("GuardEye", "Polling error: ${e.message}", e)
-                    e.printStackTrace()
-                }
-                delay(3000)
-            }
-        }
-    }
-
-    private fun sendWelcomeMessage() {
-        if (Config.botToken.isNotBlank() && Config.chatId.isNotBlank()) {
-            val welcomeText = """
-                🛡️ GuardEye 已启动
-
-                ✅ 监控服务已开启
-                📸 拍照间隔：${Config.intervalMinutes} 分钟
-                🔍 AI 识别：${if (Config.detectionEnabled) "开启" else "关闭"}
-
-                发送 /start 查看完整命令列表
-                发送 /photo 立即拍照
-                发送 /status 查看状态
-            """.trimIndent()
-            TelegramBot.sendText(welcomeText)
-        }
-    }
-
-    private fun handleCommand(text: String) {
-        when {
-            text.startsWith("/start") -> {
-                Config.enabled = true
-                TelegramBot.sendText("✅ GuardEye 已开启\n间隔：${Config.intervalMinutes}分钟\nAI 识别：${if (Config.detectionEnabled) "开启" else "关闭"}\n\n发送 /photo 立即拍照\n发送 /status 查看状态")
-            }
-            text.startsWith("/stop") -> {
-                Config.enabled = false
-                TelegramBot.sendText("⏸ GuardEye 已停止")
-            }
-            text.startsWith("/photo") -> captureAndSend(hd = true)
-            text.startsWith("/status") -> sendStatus()
-            text.startsWith("/interval") -> {
-                val mins = text.removePrefix("/interval").trim().toIntOrNull()
-                if (mins != null && mins in 1..10) {
-                    Config.intervalMinutes = mins
-                    TelegramBot.sendText("⏱ 拍摄间隔已设为 ${mins} 分钟")
-                } else {
-                    TelegramBot.sendText("用法：/interval 1-10\n当前：${Config.intervalMinutes}分钟")
-                }
-            }
-            text.startsWith("/detect") -> {
-                val enabled = !text.contains("off")
-                Config.detectionEnabled = enabled
-                TelegramBot.sendText("🔍 AI 识别：${if (enabled) "开启" else "关闭"}")
-            }
-        }
-    }
-
-    private fun sendStatus() {
-        val battery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-            bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        } else 0
-        val mem = Runtime.getRuntime()
-        val usedMB = (mem.totalMemory() - mem.freeMemory()) / 1024 / 1024
-        val totalMB = mem.totalMemory() / 1024 / 1024
-        val status = """
-            📊 GuardEye 状态
-            监控：${if (Config.enabled) "✅ 开启" else "❌ 关闭"}
-            间隔：${Config.intervalMinutes} 分钟
-            AI 识别：${if (Config.detectionEnabled) "✅ 开启" else "❌ 关闭"}
-            电量：$battery%
-            内存：${usedMB}MB / ${totalMB}MB
-            检测模型：${if (detector != null) "✅ 已加载" else "❌ 未加载"}
-            相机：${if (cameraInitialized) "✅ 已初始化" else "❌ 未初始化"}
-        """.trimIndent()
-        TelegramBot.sendText(status)
-    }
-
-    private fun captureAndSend(hd: Boolean) {
+    /**
+     * 拍照并发送（由 AlarmReceiver 或 BotForegroundService 调用）
+     */
+    fun captureAndSend(hd: Boolean) {
         serviceScope.launch {
             val photoFile = File(cacheDir, "capture_${System.currentTimeMillis()}.jpg")
             val bitmap = takePicture(photoFile, hd)
             if (bitmap == null) {
-                TelegramBot.sendText("❌ 拍照失败")
+                BotManager.notifyStatus("❌ 定时拍照失败", "takePicture returned null", NotifyLevel.WARN)
                 return@launch
             }
 
@@ -302,14 +225,16 @@ class CameraService : LifecycleService() {
                         val labels = policeDetections.joinToString(", ") {
                             "${it.label} (${(it.confidence * 100).toInt()}%)"
                         }
-                        TelegramBot.sendText("🚨 检测到疑似目标：$labels")
-                        TelegramBot.sendBitmap(annotated, "🚨 GuardEye 告警")
+                        BotManager.notifyStatus("🚨 检测到告警目标", labels, NotifyLevel.ALERT)
+                        BotManager.sendText("🚨 *GuardEye 告警*\n目标：$labels")
+                        BotManager.sendBitmap(annotatedToBytes(annotated), "🚨 GuardEye 告警")
                         triggerAlert()
                     } else {
-                        TelegramBot.sendText("ℹ️ 检测到：${detections.joinToString(", ") { it.label }}")
+                        val allLabels = detections.joinToString(", ") { "${it.label} (${(it.confidence*100).toInt()}%)" }
+                        BotManager.sendText("ℹ️ *检测结果*\n$allLabels")
                     }
                 } else {
-                    if (!hd) TelegramBot.sendBitmap(bitmap)
+                    if (!hd) BotManager.sendBitmap(annotatedToBytes(bitmap))
                 }
             }
 
@@ -318,22 +243,24 @@ class CameraService : LifecycleService() {
                 FileOutputStream(photoFile).use { fos ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos)
                 }
-                TelegramBot.sendPhoto(photoFile, "📸 GuardEye 实时画面")
+                BotManager.sendPhoto(photoFile, "📸 GuardEye 实时画面")
             }
+
+            // 重新排程下次拍照
+            scheduleNextCapture()
         }
     }
 
-    private suspend fun takePicture(file: File, hd: Boolean): Bitmap? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-        val imageCapture = this.imageCapture
-        if (imageCapture == null || !cameraInitialized) {
+    private suspend fun takePicture(file: File, hd: Boolean): Bitmap? = suspendCancellableCoroutine { cont ->
+        val ic = this.imageCapture
+        if (ic == null || !cameraInitialized) {
             android.util.Log.e("GuardEye", "CameraX not initialized")
             cont.resume(null, null)
             return@suspendCancellableCoroutine
         }
 
         val outputFileOptions = ImageCapture.OutputFileOptions.Builder(file).build()
-
-        imageCapture.takePicture(
+        ic.takePicture(
             outputFileOptions,
             cameraExecutor,
             object : ImageCapture.OnImageSavedCallback {
@@ -346,7 +273,6 @@ class CameraService : LifecycleService() {
                         cont.resume(null, null)
                     }
                 }
-
                 override fun onError(exception: ImageCaptureException) {
                     android.util.Log.e("GuardEye", "takePicture failed: ${exception.message}", exception)
                     cont.resume(null, null)
@@ -382,15 +308,19 @@ class CameraService : LifecycleService() {
         return result
     }
 
+    private fun annotatedToBytes(bitmap: Bitmap): ByteArray {
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+        return stream.toByteArray()
+    }
+
     private fun triggerAlert() {
-        // 震动
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 200, 500, 200, 500), -1))
         } else {
             @Suppress("DEPRECATION")
             vibrator?.vibrate(longArrayOf(0, 500, 200, 500, 200, 500), -1)
         }
-        // 系统通知
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("🚨 GuardEye 告警")
@@ -400,12 +330,12 @@ class CameraService : LifecycleService() {
             .build()
         try {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID + 1, notification)
-        } catch (e: SecurityException) {
-            // 无通知权限
-        }
+        } catch (e: SecurityException) { /* 无通知权限 */ }
     }
 
     override fun onDestroy() {
+        isInstanceRunning = false
+        BotForegroundService.isCameraServiceRunning = false
         serviceScope.cancel()
         cameraExecutor.shutdown()
         super.onDestroy()
