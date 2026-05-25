@@ -40,6 +40,7 @@ class BotService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        Config.init(this)
         createNotificationChannel()
         Log.d(TAG, "BotService created")
     }

@@ -38,7 +38,21 @@ class CameraService : LifecycleService() {
         const val ACTION_CAPTURE = "com.guardeye.action.CAPTURE"
         const val ACTION_STOP    = "com.guardeye.action.CAMERA_STOP"
 
-        /** Static instance ref so BotService can get last detection text */
+        /** Shared detector — cold-start once, reuse across captures */
+        private var sharedDetector: Detector? = null
+        private var sharedModelReady = false
+
+        /** Pre-warm the model in MainActivity on app start */
+        fun preloadModel(ctx: Context) {
+            if (sharedDetector == null) {
+                val d = Detector(ctx)
+                sharedModelReady = d.load()
+                sharedDetector = if (sharedModelReady) d else null
+                isModelReady = sharedModelReady
+                Log.d(TAG, "Model preloaded: $sharedModelReady")
+            }
+        }
+
         @Volatile var lastDetectionText: String = ""
             private set
 
@@ -59,7 +73,6 @@ class CameraService : LifecycleService() {
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
     private var cameraProvider: ProcessCameraProvider? = null
-    private var detector: Detector? = null
 
     // ── Lifecycle ──────────────────────────────────────────────────
 
@@ -80,7 +93,7 @@ class CameraService : LifecycleService() {
 
     override fun onDestroy() {
         cameraExecutor?.shutdown()
-        detector?.release()
+        // Note: sharedDetector is NOT released here — it's reused across captures
         cameraProvider?.unbindAll()
         Log.d(TAG, "CameraService destroyed")
         super.onDestroy()
@@ -151,16 +164,21 @@ class CameraService : LifecycleService() {
         if (token.isBlank() || chatId.isBlank()) return
 
         // ── AI Detection ──
-        if (detector == null) {
-            detector = Detector(this)
-            detector!!.load()
-            isModelReady = detector!!.isReady()
+        // Use shared detector (pre-warmed once); fallback to on-demand if not ready
+        if (sharedDetector == null) {
+            val d = Detector(this)
+            val ok = d.load()
+            if (ok) {
+                sharedDetector = d
+                sharedModelReady = true
+                isModelReady = true
+            }
         }
 
         val aiStartMs = System.currentTimeMillis()
         var detections = emptyList<Pair<String, Float>>()
-        if (Config.detectionEnabled && detector?.isReady() == true) {
-            detections = detector!!.detect(bitmap)
+        if (Config.detectionEnabled && sharedDetector?.isReady() == true) {
+            detections = sharedDetector!!.detect(bitmap)
         }
         lastAiDurationMs = System.currentTimeMillis() - aiStartMs
 
@@ -178,7 +196,7 @@ class CameraService : LifecycleService() {
         lastCaptureTime = System.currentTimeMillis()
 
         // ── Alert check ──
-        val hasAlert = detector?.hasAlert(detections) == true
+        val hasAlert = sharedDetector?.hasAlert(detections) == true
 
         // ── Build debug block ──
         val debugBlock = if (Config.debugMode) """
@@ -187,7 +205,7 @@ class CameraService : LifecycleService() {
             🧠 AI推理：${lastAiDurationMs}ms
             📐 分辨率：${bitmap.width}×${bitmap.height}
             🔋 电量：${getBatteryLevel()}%
-            🤖 模型：${if (detector?.isReady() == true) "✅ 已加载" else "❌ 未加载"}
+            🤖 模型：${if (sharedDetector?.isReady() == true) "✅ 已加载" else "❌ 未加载"}
         """.trimIndent() else ""
 
         val alertText = if (hasAlert) "\n⚠️ **告警：可疑目标已检测**" else ""

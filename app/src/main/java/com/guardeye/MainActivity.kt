@@ -61,6 +61,9 @@ class MainActivity : AppCompatActivity() {
 
         Config.init(this)
 
+        // Pre-warm model early so it's ready before first photo
+        CameraService.preloadModel(this)
+
         initViews()
         loadConfig()
         setupListeners()
@@ -178,6 +181,9 @@ class MainActivity : AppCompatActivity() {
         Config.botToken = etBotToken.text.toString().trim()
         Config.chatId = etChatId.text.toString().trim()
         Config.intervalMinutes = sliderInterval.progress + 1
+
+        // 0. Pre-warm YOLO model so first photo is fast
+        CameraService.preloadModel(this)
 
         // 1. Start BotService
         val botIntent = Intent(this, BotService::class.java).apply {

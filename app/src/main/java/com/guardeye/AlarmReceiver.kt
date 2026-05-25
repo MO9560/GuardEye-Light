@@ -15,10 +15,11 @@ import android.util.Log
 class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
-        const val TAG = "GuardEye.Alarm"
-        const val REQUEST_CODE = 1001
+        private const val TAG = "GuardEye.Alarm"
+        private const val REQUEST_CODE = 1001
 
         fun scheduleAlarm(ctx: Context, intervalMinutes: Int) {
+            Config.init(ctx) // init before reading Config values
             val intent = Intent(ctx, AlarmReceiver::class.java)
             val pi = PendingIntent.getBroadcast(
                 ctx,
@@ -33,16 +34,19 @@ class AlarmReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (alarm.canScheduleExactAlarms()) {
                     alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    Log.d(TAG, "Alarm scheduled (exact): every $intervalMinutes min at $triggerAt")
                 } else {
                     alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    Log.w(TAG, "Alarm scheduled (inexact — SCHEDULE_EXACT_ALARM not granted): every $intervalMinutes min")
                 }
             } else {
                 alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                Log.d(TAG, "Alarm scheduled: every $intervalMinutes min at $triggerAt")
             }
-            Log.d(TAG, "Alarm scheduled: every $intervalMinutes min at $triggerAt")
         }
 
         fun cancelAlarm(ctx: Context) {
+            Config.init(ctx)
             val intent = Intent(ctx, AlarmReceiver::class.java)
             val pi = PendingIntent.getBroadcast(
                 ctx,
@@ -57,12 +61,14 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {
-        Log.d(TAG, "Alarm triggered")
-        Config.init(ctx)  // init Config in this process before use
+        Config.init(ctx) // CRITICAL: init before reading any Config values
+        Log.d(TAG, "Alarm fired — enabled=${Config.enabled}, interval=${Config.intervalMinutes}")
+
         if (!Config.enabled) {
-            Log.d(TAG, "Config.enabled=false, skipping capture")
+            Log.d(TAG, "Skipping capture (disabled)")
             return
         }
+
         // Fire CameraService to take one photo
         val camIntent = Intent(ctx, CameraService::class.java).apply {
             action = CameraService.ACTION_CAPTURE
@@ -72,9 +78,8 @@ class AlarmReceiver : BroadcastReceiver() {
         } else {
             ctx.startService(camIntent)
         }
+
         // Re-schedule next alarm
-        if (Config.enabled) {
-            scheduleAlarm(ctx, Config.intervalMinutes)
-        }
+        scheduleAlarm(ctx, Config.intervalMinutes)
     }
 }
