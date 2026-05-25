@@ -215,14 +215,14 @@ class BotForegroundService : LifecycleService(), BotStatusListener {
                 BotManager.notifyStatus("AI 识别已${if (enabled) "开启" else "关闭"}", level = NotifyLevel.INFO)
             }
 
-            text.startsWith("/health") -> {
-                // 手动触发健康检查
-                checkAndNotifyBotHealth()
-            }
-
             text.startsWith("/test") -> {
                 // 测试命令 — 直接回复证明 Bot 活着
                 BotManager.sendText("🤖 Bot 在线！\n时间：${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\nchatId：$chatId\noffset：${Config.botOffset}")
+            }
+
+            text.startsWith("/health") -> {
+                // 健康检查 — 始终发诊断文本
+                checkAndNotifyBotHealth()
             }
 
             else -> {
@@ -256,21 +256,34 @@ class BotForegroundService : LifecycleService(), BotStatusListener {
     }
 
     private fun checkAndNotifyBotHealth() {
-        if (!isRunning) return
+        if (!isRunning) {
+            BotManager.sendText("⚠️ Bot 服务未运行，请重启应用")
+            return
+        }
         val status = BotManager.getStatus()
 
         val issues = mutableListOf<String>()
-        if (!status.isTokenSet) issues.add("⚠️ Token 未配置")
-        if (!status.isChatIdSet) issues.add("⚠️ Chat ID 未配置")
-        if (!status.isPolling) issues.add("🔴 轮询已停止")
+        val checks = mutableListOf<String>()
 
-        if (issues.isEmpty()) {
-            // Bot 链路健康，可以推送心跳（每 N 分钟一次）
-            BotManager.showBotOnlineNotification()
-        } else {
-            val text = "⚠️ *Bot 健康检查异常*\n" + issues.joinToString("\n")
-            BotManager.sendText(text)
+        if (status.isTokenSet) checks.add("✅ Token 已配置")
+        else issues.add("⚠️ Token 未配置")
+
+        if (status.isChatIdSet) checks.add("✅ Chat ID 已配置")
+        else issues.add("⚠️ Chat ID 未配置")
+
+        if (status.isPolling) checks.add("✅ 轮询运行中")
+        else issues.add("🔴 轮询已停止")
+
+        val text = buildString {
+            appendLine("🏥 *Bot 健康检查*")
+            appendLine("───")
+            checks.forEach { appendLine(it) }
+            issues.forEach { appendLine(it) }
+            appendLine("───")
+            appendLine("⏱ offset：${status.lastOffset}")
+            appendLine("🕐 ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
         }
+        BotManager.sendText(text)
     }
 
     // ========== 辅助方法 ==========
