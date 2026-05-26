@@ -17,6 +17,7 @@ class AlarmReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "GuardEye.Alarm"
         private const val REQUEST_CODE = 1001
+        const val EXTRA_INTERVAL_MILLIS = "interval_millis"
 
         fun scheduleAlarm(ctx: Context, intervalMinutes: Int) {
             Config.init(ctx) // init before reading Config values
@@ -72,6 +73,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Fire CameraService to take one photo
         val camIntent = Intent(ctx, CameraService::class.java).apply {
             action = CameraService.ACTION_CAPTURE
+            putExtra(CameraService.EXTRA_SOURCE, CameraService.SOURCE_INTERVAL)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(camIntent)

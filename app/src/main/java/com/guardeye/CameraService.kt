@@ -24,12 +24,15 @@ import java.util.concurrent.Executors
 /**
  * Camera + AI capture service.
  *
- * Design: stateless, short-lived. Starts → captures → sends → stops.
- * Does NOT remain running in background.
+ * Design: stateless, short-lived. Starts -> captures -> sends -> stops.
  *
  * Actions:
- *   ACTION_CAPTURE → capture a frame, run AI, send via Telegram, stopSelf()
- *   ACTION_STOP    → clean up and stop
+ *   ACTION_CAPTURE -> capture a frame, run AI, send via Telegram, stopSelf()
+ *   ACTION_STOP    -> clean up and stop
+ *
+ * Capture source is passed via EXTRA_SOURCE intent extra:
+ *   SOURCE_INTERVAL ("interval") -> triggered by AlarmReceiver
+ *   SOURCE_MANUAL  ("manual")  -> triggered by /photo command
  */
 class CameraService : LifecycleService() {
 
@@ -37,6 +40,9 @@ class CameraService : LifecycleService() {
         const val TAG = "GuardEye.Camera"
         const val ACTION_CAPTURE = "com.guardeye.action.CAPTURE"
         const val ACTION_STOP    = "com.guardeye.action.CAMERA_STOP"
+        const val EXTRA_SOURCE   = "extra_source"
+        const val SOURCE_INTERVAL = "interval"
+        const val SOURCE_MANUAL   = "manual"
 
         /** Shared detector — cold-start once, reuse across captures */
         private var sharedDetector: Detector? = null
@@ -67,12 +73,18 @@ class CameraService : LifecycleService() {
 
         @Volatile var lastAiDurationMs: Long = 0L
             private set
+
+        /** Source of last capture: SOURCE_INTERVAL or SOURCE_MANUAL */
+        @Volatile var lastSource: String = SOURCE_MANUAL
+            private set
     }
 
     private var cameraExecutor: ExecutorService? = null
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
     private var cameraProvider: ProcessCameraProvider? = null
+    /** Capture source: "interval" or "manual" */
+    private var captureSource: String = SOURCE_MANUAL
 
     // ── Lifecycle ──────────────────────────────────────────────────
 
@@ -84,6 +96,7 @@ class CameraService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        captureSource = intent?.getStringExtra(EXTRA_SOURCE) ?: SOURCE_MANUAL
         when (intent?.action) {
             ACTION_CAPTURE -> captureAndSend()
             ACTION_STOP    -> { stopSelf(); return START_NOT_STICKY }
@@ -93,7 +106,6 @@ class CameraService : LifecycleService() {
 
     override fun onDestroy() {
         cameraExecutor?.shutdown()
-        // Note: sharedDetector is NOT released here — it's reused across captures
         cameraProvider?.unbindAll()
         Log.d(TAG, "CameraService destroyed")
         super.onDestroy()
@@ -149,7 +161,7 @@ class CameraService : LifecycleService() {
                     lifecycleScope.launch(Dispatchers.IO) {
                         TelegramBot.sendText(
                             Config.botToken, Config.chatId,
-                            "❌ 拍照失败：${exception.message}"
+                            "❌ Capture failed: ${exception.message}"
                         )
                         withContext(Dispatchers.Main) { stopSelf() }
                     }
@@ -164,7 +176,6 @@ class CameraService : LifecycleService() {
         if (token.isBlank() || chatId.isBlank()) return
 
         // ── AI Detection ──
-        // Use shared detector (pre-warmed once); fallback to on-demand if not ready
         if (sharedDetector == null) {
             val d = Detector(this)
             val ok = d.load()
@@ -182,18 +193,29 @@ class CameraService : LifecycleService() {
         }
         lastAiDurationMs = System.currentTimeMillis() - aiStartMs
 
+        // ── Record capture metadata ──
+        val nowMs = System.currentTimeMillis()
+        lastCaptureTime = nowMs
+        lastSource = captureSource
+        if (captureSource == SOURCE_INTERVAL) {
+            Config.lastIntervalCaptureTime = nowMs
+        } else {
+            Config.lastManualCaptureTime = nowMs
+        }
+        Config.lastCaptureSource = captureSource
+
         // ── Build caption ──
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        val srcLabel   = if (captureSource == SOURCE_INTERVAL) "Auto capture" else "Manual capture"
         val detectionText = if (detections.isEmpty()) {
-            "🔍 检测：无目标"
+            "🔍 Detection: no objects"
         } else {
-            "🔍 检测到 ${detections.size} 个目标：\n" +
+            "🔍 Detected ${detections.size} object(s):\n" +
                 detections.take(5).joinToString("\n") { (label, conf) ->
                     "  • $label ${(conf * 100).toInt()}%"
                 }
         }
         lastDetectionText = detectionText
-        lastCaptureTime = System.currentTimeMillis()
 
         // ── Alert check ──
         val hasAlert = sharedDetector?.hasAlert(detections) == true
@@ -201,17 +223,18 @@ class CameraService : LifecycleService() {
         // ── Build debug block ──
         val debugBlock = if (Config.debugMode) """
             ─────────────────────
-            ⏱ 拍照：${lastCaptureDurationMs}ms
-            🧠 AI推理：${lastAiDurationMs}ms
-            📐 分辨率：${bitmap.width}×${bitmap.height}
-            🔋 电量：${getBatteryLevel()}%
-            🤖 模型：${if (sharedDetector?.isReady() == true) "✅ 已加载" else "❌ 未加载"}
+            📷 Source: $srcLabel
+            ⏱ Capture: ${lastCaptureDurationMs}ms
+            🧠 AI inference: ${lastAiDurationMs}ms
+            📐 Resolution: ${bitmap.width}x${bitmap.height}
+            🔋 Battery: ${getBatteryLevel()}%
+            🤖 Model: ${if (sharedDetector?.isReady() == true) "✅ Loaded" else "❌ Not loaded"}
         """.trimIndent() else ""
 
-        val alertText = if (hasAlert) "\n⚠️ **告警：可疑目标已检测**" else ""
+        val alertText = if (hasAlert) "\n⚠️ **Alert: suspicious object detected**" else ""
 
         val caption = """
-            📸 GuardEye 拍照报告
+            📸 GuardEye Capture Report
             ─────────────────────
             🕐 $timestamp
             $detectionText
@@ -224,19 +247,20 @@ class CameraService : LifecycleService() {
         val photoResult = TelegramBot.sendPhoto(token, chatId, bytes, caption)
         photoResult.onFailure {
             Log.e(TAG, "sendPhoto failed: ${it.message}")
-            TelegramBot.sendText(token, chatId, "📸 照片发送失败：${it.message}")
+            TelegramBot.sendText(token, chatId, "📸 Photo send failed: ${it.message}")
         }
 
         if (hasAlert) {
             TelegramBot.sendText(
                 token, chatId,
-                "⚠️ **告警推送** — ${detections.joinToString(", ") { "${it.first} ${(it.second * 100).toInt()}%" }}"
+                "⚠️ **Alert** — ${detections.joinToString(", ") { "${it.first} ${(it.second * 100).toInt()}%" }}"
             )
         }
     }
 
     // ── Utilities ─────────────────────────────────────────────────
 
+    @SuppressLint("UnsafeOptInUsageError")
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
         val buf = image.planes[0].buffer
         val bytes = ByteArray(buf.remaining())

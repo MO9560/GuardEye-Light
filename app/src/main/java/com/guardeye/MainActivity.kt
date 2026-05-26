@@ -9,7 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.util.Log
+import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -25,15 +25,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etChatId: EditText
     private lateinit var sliderInterval: SeekBar
     private lateinit var tvInterval: TextView
-    private lateinit var switchDetection: Switch
-    private lateinit var switchDebug: Switch
+    private lateinit var switchDetection: com.google.android.material.materialswitch.MaterialSwitch
+    private lateinit var switchDebug: com.google.android.material.materialswitch.MaterialSwitch
     private lateinit var btnSave: Button
     private lateinit var btnStart: Button
     private lateinit var tvBotStatus: TextView
     private lateinit var tvVersion: TextView
     private lateinit var tvDebug: TextView
+    private lateinit var cardDebug: View
+    private lateinit var btnToggleDebug: ImageView
 
     private val handler = Handler(Looper.getMainLooper())
+    private var debugExpanded = false
 
     // Refresh debug panel every 3 seconds
     private val refreshDebugRunnable = object : Runnable {
@@ -49,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         if (results.all { it.value }) {
             requestBatteryOpt()
         } else {
-            Toast.makeText(this, "需要相机和网络权限", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Camera and network permissions required", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -93,6 +96,8 @@ class MainActivity : AppCompatActivity() {
         tvBotStatus     = findViewById(R.id.tvBotStatus)
         tvVersion       = findViewById(R.id.tvVersion)
         tvDebug         = findViewById(R.id.tvDebug)
+        cardDebug       = findViewById(R.id.cardDebug)
+        btnToggleDebug  = findViewById(R.id.btnToggleDebug)
         tvVersion.text  = "v${BuildConfig.VERSION_NAME}"
     }
 
@@ -100,7 +105,7 @@ class MainActivity : AppCompatActivity() {
         etBotToken.setText(Config.botToken)
         etChatId.setText(Config.chatId)
         sliderInterval.progress = (Config.intervalMinutes - 1).coerceIn(0, 9)
-        tvInterval.text = "${Config.intervalMinutes} 分钟"
+        tvInterval.text = "${Config.intervalMinutes} min"
         switchDetection.isChecked = Config.detectionEnabled
         switchDebug.isChecked = Config.debugMode
         refreshBotStatusUI()
@@ -111,7 +116,7 @@ class MainActivity : AppCompatActivity() {
         sliderInterval.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 val mins = (progress + 1).coerceIn(1, 10)
-                tvInterval.text = "$mins 分钟"
+                tvInterval.text = "$mins min"
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
@@ -120,28 +125,42 @@ class MainActivity : AppCompatActivity() {
         // Save button
         btnSave.setOnClickListener {
             saveConfig()
-            Toast.makeText(this, "✅ 配置已保存", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Config saved", Toast.LENGTH_SHORT).show()
         }
 
-        // Start button
+        // Start / Stop button
         btnStart.setOnClickListener {
-            saveConfig()
-            if (!Config.isConfigured) {
-                Toast.makeText(this, "请填写 Bot Token 和 Chat ID", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            if (Config.enabled) {
+                stopAll()
+            } else {
+                saveConfig()
+                if (!Config.isConfigured) {
+                    Toast.makeText(this, "Fill in Bot Token and Chat ID first", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                checkPermissionsAndStart()
             }
-            checkPermissionsAndStart()
+        }
+
+        // Debug panel expand/collapse
+        cardDebug.setOnClickListener {
+            debugExpanded = !debugExpanded
+            tvDebug.maxLines = if (debugExpanded) Int.MAX_VALUE else 4
+            btnToggleDebug.setImageResource(
+                if (debugExpanded) android.R.drawable.arrow_up_float
+                else android.R.drawable.arrow_down_float
+            )
         }
     }
 
     // ── Config ──────────────────────────────────────────────────
 
     private fun saveConfig() {
-        Config.botToken        = etBotToken.text.toString().trim()
-        Config.chatId         = etChatId.text.toString().trim()
-        Config.intervalMinutes = sliderInterval.progress + 1
+        Config.botToken         = etBotToken.text.toString().trim()
+        Config.chatId           = etChatId.text.toString().trim()
+        Config.intervalMinutes  = sliderInterval.progress + 1
         Config.detectionEnabled = switchDetection.isChecked
-        Config.debugMode      = switchDebug.isChecked
+        Config.debugMode        = switchDebug.isChecked
     }
 
     // ── Permissions & Start/Stop ─────────────────────────────────
@@ -178,11 +197,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun startAll() {
         Config.enabled = true
-        Config.botToken = etBotToken.text.toString().trim()
-        Config.chatId = etChatId.text.toString().trim()
+        Config.botToken        = etBotToken.text.toString().trim()
+        Config.chatId          = etChatId.text.toString().trim()
         Config.intervalMinutes = sliderInterval.progress + 1
 
-        // 0. Pre-warm YOLO model so first photo is fast
         CameraService.preloadModel(this)
 
         // 1. Start BotService
@@ -195,16 +213,19 @@ class MainActivity : AppCompatActivity() {
             startService(botIntent)
         }
 
-        // 2. Start BotService command: tell bot I'm starting
+        // 2. Send startup message via Telegram
         Handler(Looper.getMainLooper()).postDelayed({
-            TelegramBot.sendText(Config.botToken, Config.chatId,
-                "🚀 *GuardEye 已启动*\n间隔：${Config.intervalMinutes}分钟\n调试：${if (Config.debugMode) "开启" else "关闭"}")
+            TelegramBot.sendText(
+                Config.botToken, Config.chatId,
+                "GuardEye started\nInterval: ${Config.intervalMinutes}min\nDebug: ${if (Config.debugMode) "On" else "Off"}"
+            )
         }, 2000)
 
         // 3. Take first photo immediately
         Handler(Looper.getMainLooper()).postDelayed({
             val camIntent = Intent(this, CameraService::class.java).apply {
                 action = CameraService.ACTION_CAPTURE
+                putExtra(CameraService.EXTRA_SOURCE, CameraService.SOURCE_MANUAL)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(camIntent)
@@ -217,31 +238,28 @@ class MainActivity : AppCompatActivity() {
         AlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
 
         refreshBotStatusUI()
-        Toast.makeText(this, "🚀 GuardEye 已启动", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "GuardEye started", Toast.LENGTH_SHORT).show()
     }
 
     private fun stopAll() {
         Config.enabled = false
 
-        // Stop alarm
         AlarmReceiver.cancelAlarm(this)
 
-        // Stop BotService
         val botIntent = Intent(this, BotService::class.java).apply {
             action = BotService.ACTION_STOP
         }
         startService(botIntent)
 
-        // Stop CameraService
         val camIntent = Intent(this, CameraService::class.java).apply {
             action = CameraService.ACTION_STOP
         }
         startService(camIntent)
 
-        TelegramBot.sendText(Config.botToken, Config.chatId, "⏸ *GuardEye 已停止*")
+        TelegramBot.sendText(Config.botToken, Config.chatId, "GuardEye stopped")
 
         refreshBotStatusUI()
-        Toast.makeText(this, "⏹ GuardEye 已停止", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "GuardEye stopped", Toast.LENGTH_SHORT).show()
     }
 
     // ── UI Refresh ──────────────────────────────────────────────
@@ -253,16 +271,24 @@ class MainActivity : AppCompatActivity() {
 
         tvBotStatus.apply {
             text = when {
-                !tokenOk || !chatOk -> "⚠️ Token 或 Chat ID 未填写"
-                running -> "✅ 监控中"
-                else -> "⏹ 已停止"
+                !tokenOk || !chatOk -> "Not configured"
+                running -> "Running"
+                else -> "Stopped"
             }
             setTextColor(ContextCompat.getColor(this@MainActivity,
                 when {
-                    !tokenOk || !chatOk -> R.color.red
+                    !tokenOk || !chatOk -> R.color.amber
                     running -> R.color.green
                     else -> R.color.text_secondary
                 }
+            ))
+        }
+
+        btnStart.apply {
+            text = if (running) "Stop" else "Start"
+            setBackgroundColor(ContextCompat.getColor(this@MainActivity,
+                if (running) ContextCompat.getColor(this@MainActivity, R.color.red)
+                else ContextCompat.getColor(this@MainActivity, R.color.accent)
             ))
         }
     }
@@ -271,46 +297,42 @@ class MainActivity : AppCompatActivity() {
         val token = Config.botToken
         val chatId = Config.chatId
 
-        // Memory
         val rt = Runtime.getRuntime()
         val usedMB = (rt.totalMemory() - rt.freeMemory()) / 1024 / 1024
         val maxMB  = rt.maxMemory() / 1024 / 1024
-        val freeMB = (rt.freeMemory()) / 1024 / 1024
 
-        // Model
         val modelFile = File(filesDir, "yolov8n.tflite")
-        val modelStatus = if (modelFile.exists()) "✅ 已加载" else "❌ 未加载(${filesDir.absolutePath})"
+        val modelStatus = if (modelFile.exists()) "Loaded" else "Not loaded"
 
-        // Battery
         val battery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
             bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
         } else 0
 
-        // Camera
-        val cameraStatus = if (CameraService.isModelReady) "✅ 就绪" else "⏳ 初始化中"
+        val cameraReady = if (CameraService.isModelReady) "Ready" else "Initializing"
 
-        // Last capture
-        val lastCap = if (CameraService.lastCaptureTime > 0) {
-            SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(CameraService.lastCaptureTime))
-        } else "—"
+        fun fmtTime(ts: Long): String =
+            if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(ts))
+            else "—"
 
-        val detectionText = CameraService.lastDetectionText.ifBlank { "无" }
+        val lastCap  = fmtTime(CameraService.lastCaptureTime)
+        val srcLabel = if (CameraService.lastSource == CameraService.SOURCE_INTERVAL) "Auto" else "Manual"
+        val detection = CameraService.lastDetectionText.ifBlank { "None" }
 
         val text = buildString {
-            appendLine("🤖 Bot：${if (token.isNotBlank()) "✅ Token OK" else "❌ 未填"}")
-            appendLine("📡 Chat ID：${if (chatId.isNotBlank()) chatId else "❌ 未填"}")
-            appendLine("📸 相机：$cameraStatus")
-            appendLine("🧠 模型：$modelStatus")
-            appendLine("⏱ 间隔：${Config.intervalMinutes} 分钟")
-            appendLine("🔍 AI识别：${if (Config.detectionEnabled) "✅ 开启" else "❌ 关闭"}")
-            appendLine("🐛 调试：${if (Config.debugMode) "✅ 开启" else "❌ 关闭"}")
-            appendLine("⏰ 最近拍照：$lastCap")
-            appendLine("📊 拍照耗时：${CameraService.lastCaptureDurationMs}ms")
-            appendLine("🧠 AI耗时：${CameraService.lastAiDurationMs}ms")
-            appendLine("🔋 电量：$battery%")
-            appendLine("💾 JVM：${usedMB}MB / ${maxMB}MB")
-            appendLine("🔍 检测：$detectionText")
+            appendLine("Bot: ${if (token.isNotBlank()) "OK" else "Not set"}")
+            appendLine("Chat ID: ${if (chatId.isNotBlank()) chatId else "Not set"}")
+            appendLine("Camera: $cameraReady")
+            appendLine("Model: $modelStatus")
+            appendLine("Interval: ${Config.intervalMinutes} min")
+            appendLine("AI Detection: ${if (Config.detectionEnabled) "On" else "Off"}")
+            appendLine("Debug: ${if (Config.debugMode) "On" else "Off"}")
+            appendLine("Last capture: $lastCap ($srcLabel)")
+            appendLine("Capture time: ${CameraService.lastCaptureDurationMs}ms")
+            appendLine("AI time: ${CameraService.lastAiDurationMs}ms")
+            appendLine("Battery: $battery%")
+            appendLine("JVM: ${usedMB}MB / ${maxMB}MB")
+            appendLine("Detection: $detection")
         }
         tvDebug.text = text
     }

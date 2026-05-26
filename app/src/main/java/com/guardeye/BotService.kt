@@ -18,8 +18,8 @@ import java.util.*
  * Foreground Service that long-polls Telegram for commands and routes them to handleCommand().
  *
  * Lifecycle:
- *   startService(ACTION_START) → starts polling loop
- *   startService(ACTION_STOP)  → stops polling, self-destroy
+ *   startService(ACTION_START) -> starts polling loop
+ *   startService(ACTION_STOP)  -> stops polling, self-destroy
  */
 class BotService : LifecycleService() {
 
@@ -57,8 +57,7 @@ class BotService : LifecycleService() {
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onDestroy() {
-        pollingJob?.cancel()       // 只取消轮询循环
-        // cmdScope.cancel() 先注释掉，让正在处理的命令完成（先跑通再优化）
+        pollingJob?.cancel()
         isRunning = false
         Log.d(TAG, "BotService destroyed")
         super.onDestroy()
@@ -72,8 +71,7 @@ class BotService : LifecycleService() {
             return
         }
         isRunning = true
-        startForeground(NOTIFICATION_ID, buildNotification("🔗 GuardEye Bot 启动中..."))
-        // 用 cmdScope 启动轮询，避免 lifecycleScope 被取消时轮询停止
+        startForeground(NOTIFICATION_ID, buildNotification("GuardEye Bot starting..."))
         pollingJob = cmdScope.launch {
             Log.d(TAG, "Polling loop started, isActive=${isActive}")
             while (isActive && isRunning) {
@@ -81,17 +79,16 @@ class BotService : LifecycleService() {
                 val chatId = Config.chatId
                 Log.d(TAG, "Polling... token=${token.take(10)}..., chatId=$chatId, offset=${Config.botOffset}")
                 if (token.isBlank() || chatId.isBlank()) {
-                    updateNotification("⚠️ 未配置 Token 或 Chat ID")
+                    updateNotification("Token or Chat ID not configured")
                     delay(10_000)
                     continue
                 }
                 val result = TelegramBot.fetchUpdates(token, Config.botOffset)
                 result.onSuccess { updates ->
                     Log.d(TAG, "Received ${updates.size} updates")
-                    if (updates.isNotEmpty()) updateNotification("📨 ${updates.size} 条新消息")
+                    if (updates.isNotEmpty()) updateNotification("${updates.size} new messages")
                     updates.forEach { update ->
                         Config.botOffset = update.updateId + 1
-                        // Use NonCancellable so commands finish even if lifecycle shuts down
                         cmdScope.launch(NonCancellable) {
                             Log.d(TAG, "Handling command: ${update.text}")
                             handleCommand(update.text, update.chatId)
@@ -99,13 +96,13 @@ class BotService : LifecycleService() {
                     }
                 }
                 result.onFailure {
-                    Log.e(TAG, "Poll error: ${it.message}")  // 改用 e，方便排查
+                    Log.e(TAG, "Poll error: ${it.message}")
                 }
                 delay(500)
             }
             Log.d(TAG, "Polling loop ended")
         }
-        updateNotification("✅ Bot 已连接")
+        updateNotification("Bot connected")
         Log.i(TAG, "Polling started")
     }
 
@@ -117,7 +114,7 @@ class BotService : LifecycleService() {
 
         // Authorization check
         if (cfgChatId.isNotBlank() && chatId != cfgChatId) {
-            TelegramBot.sendText(token, chatId, "⚠️ 未授权用户")
+            TelegramBot.sendText(token, chatId, "Unauthorized user")
             return@withContext
         }
 
@@ -126,31 +123,31 @@ class BotService : LifecycleService() {
         when {
             text.startsWith("/start") -> {
                 Config.enabled = true
+                AlarmReceiver.scheduleAlarm(this@BotService, Config.intervalMinutes)
                 TelegramBot.sendText(token, chatId, """
-                    ✅ *GuardEye 已启动*
-                    
-                    📸 监控：${if (Config.enabled) "运行中" else "已停止"}
-                    ⏱ 间隔：${Config.intervalMinutes} 分钟
-                    🔍 AI识别：${if (Config.detectionEnabled) "开启" else "关闭"}
-                    🐛 调试：${if (Config.debugMode) "开启" else "关闭"}
+                    ✅ *GuardEye Started*
+
+                    📸 Monitoring: ${if (Config.enabled) "Running" else "Stopped"}
+                    ⏱ Interval: ${Config.intervalMinutes} minutes
+                    🔍 AI Detection: ${if (Config.detectionEnabled) "On" else "Off"}
+                    🐛 Debug: ${if (Config.debugMode) "On" else "Off"}
                     🤖 v${BuildConfig.VERSION_NAME}
-                    
+
                     📋 /photo /status /stop
                 """.trimIndent())
             }
 
             text.startsWith("/stop") -> {
                 Config.enabled = false
-                TelegramBot.sendText(token, chatId, "⏸ *GuardEye 已停止*")
-                // Stop camera alarm too
+                TelegramBot.sendText(token, chatId, "⏸ *GuardEye Stopped*")
                 AlarmReceiver.cancelAlarm(this@BotService)
             }
 
             text.startsWith("/photo") -> {
-                TelegramBot.sendText(token, chatId, "📸 正在拍照，请稍候...")
-                // Trigger CameraService immediately
+                TelegramBot.sendText(token, chatId, "📸 Taking photo, please wait...")
                 val intent = Intent(this@BotService, CameraService::class.java).apply {
                     action = CameraService.ACTION_CAPTURE
+                    putExtra(CameraService.EXTRA_SOURCE, CameraService.SOURCE_MANUAL)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(intent)
@@ -168,30 +165,30 @@ class BotService : LifecycleService() {
                 if (mins != null && mins in 1..10) {
                     Config.intervalMinutes = mins
                     AlarmReceiver.scheduleAlarm(this@BotService, mins)
-                    TelegramBot.sendText(token, chatId, "⏱ 拍摄间隔已设为 *${mins} 分钟*")
+                    TelegramBot.sendText(token, chatId, "⏱ Interval set to *${mins} minutes*")
                 } else {
-                    TelegramBot.sendText(token, chatId, "📖 用法：`/interval 1-10`")
+                    TelegramBot.sendText(token, chatId, "Usage: `/interval 1-10`")
                 }
             }
 
             text.startsWith("/detect") -> {
                 val enabled = !text.contains("off")
                 Config.detectionEnabled = enabled
-                TelegramBot.sendText(token, chatId, "🔍 AI识别：${if (enabled) "✅ 开启" else "❌ 关闭"}")
+                TelegramBot.sendText(token, chatId, "🔍 AI Detection: ${if (enabled) "✅ On" else "❌ Off"}")
             }
 
             text.startsWith("/debug") -> {
                 val enabled = !text.contains("off")
                 Config.debugMode = enabled
-                TelegramBot.sendText(token, chatId, "🐛 调试模式：${if (enabled) "✅ 开启" else "❌ 关闭"}")
+                TelegramBot.sendText(token, chatId, "🐛 Debug Mode: ${if (enabled) "✅ On" else "❌ Off"}")
             }
 
             text.startsWith("/test") -> {
-                TelegramBot.sendText(token, chatId, "🤖 Bot 在线！\n时间：$timestamp\nchatId: $chatId")
+                TelegramBot.sendText(token, chatId, "🤖 Bot online!\nTime: $timestamp\nchatId: $chatId")
             }
 
             else -> {
-                TelegramBot.sendText(token, chatId, "📖 未知指令：$text\n\n📋 /start /stop /photo /status")
+                TelegramBot.sendText(token, chatId, "📖 Unknown: $text\n\n📋 /start /stop /photo /status")
             }
         }
     }
@@ -201,23 +198,33 @@ class BotService : LifecycleService() {
         val battery = getBatteryLevel()
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
+        fun fmtTime(ts: Long): String =
+            if (ts > 0) SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(ts))
+            else "—"
+
+        val lastInterval = fmtTime(Config.lastIntervalCaptureTime)
+        val lastManual  = fmtTime(Config.lastManualCaptureTime)
+
         val debug = if (Config.debugMode) """
             ─────────────────────
-            🧠 模型：${if (modelFile.exists()) "✅ 已加载" else "❌ 未加载"}
-            📡 offset：${Config.botOffset}
-            🔋 电量：$battery%
-            ⏰ 本地时间：$now
+            🧠 Model: ${ if (modelFile.exists()) "✅ Loaded" else "❌ Not loaded" }
+            📡 offset: ${Config.botOffset}
+            🔋 Battery: $battery%
+            ⏰ Local time: $now
         """.trimIndent() else ""
 
         TelegramBot.sendText(token, chatId, """
-            📊 *GuardEye 状态*
+            📊 *GuardEye Status*
             ─────────────────────
-            🤖 Bot：✅ 运行中
-            📸 监控：${if (Config.enabled) "运行中" else "已停止"}
-            ⏱ 间隔：${Config.intervalMinutes} 分钟
-            🔍 AI识别：${if (Config.detectionEnabled) "✅ 开启" else "❌ 关闭"}
-            🐛 调试：${if (Config.debugMode) "✅ 开启" else "❌ 关闭"}
-            ─────────────────────$debug
+            🤖 Bot: ✅ Running
+            📸 Monitoring: ${ if (Config.enabled) "Running" else "Stopped" }
+            ⏱ Interval: ${Config.intervalMinutes} minutes
+            🔍 AI Detection: ${ if (Config.detectionEnabled) "✅ On" else "❌ Off" }
+            🐛 Debug: ${ if (Config.debugMode) "✅ On" else "❌ Off" }
+            ─────────────────────
+            ⏰ Last auto capture: $lastInterval
+            📷 Last manual capture: $lastManual
+            $debug
         """.trimIndent())
     }
 

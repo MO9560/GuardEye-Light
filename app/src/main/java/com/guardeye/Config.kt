@@ -13,6 +13,9 @@ object Config {
     private const val KEY_DEBUG       = "debug_enabled"
     private const val KEY_CAM_FACING  = "camera_facing"
     private const val KEY_OFFSET      = "bot_offset"
+    private const val KEY_LAST_INTERVAL_CAPTURE = "last_interval_capture"
+    private const val KEY_LAST_MANUAL_CAPTURE  = "last_manual_capture"
+    private const val KEY_CAPTURE_SOURCE       = "last_capture_source"
 
     private lateinit var prefs: SharedPreferences
 
@@ -52,6 +55,21 @@ object Config {
     var botOffset: Long
         get() = prefs.getLong(KEY_OFFSET, 0L)
         set(v) = prefs.edit().putLong(KEY_OFFSET, v).apply()
+
+    /** Timestamp of last interval-triggered capture (ms) */
+    var lastIntervalCaptureTime: Long
+        get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE, v).apply()
+
+    /** Timestamp of last manual capture via /photo (ms) */
+    var lastManualCaptureTime: Long
+        get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
+
+    /** Source of last capture: "interval" | "manual" */
+    var lastCaptureSource: String
+        get() = prefs.getString(KEY_CAPTURE_SOURCE, "manual") ?: "manual"
+        set(v) = prefs.edit().putString(KEY_CAPTURE_SOURCE, v).apply()
 
     val isConfigured: Boolean
         get() = botToken.isNotBlank() && chatId.isNotBlank()
