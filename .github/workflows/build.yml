@@ -26,27 +26,27 @@ jobs:
                   app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi \
                   app/src/main/res/mipmap-xxxhdpi
 
-      - name: Download YOLOv8n model (main flavor only)
+      - name: Download YOLOv8n model (full flavor only)
         run: |
           mkdir -p app/src/main/assets
           curl -L -o app/src/main/assets/yolov8n.tflite \
             "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.tflite"
 
-      - name: Build GuardEye main debug APK
+      - name: Build GuardEye full debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleMainDebug --no-daemon
+          ./gradlew assembleFullDebug --no-daemon --stacktrace
 
       - name: Build GuardEye Light debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleLightDebug --no-daemon
+          ./gradlew assembleLightDebug --no-daemon --stacktrace
 
-      - name: Upload GuardEye main APK
+      - name: Upload GuardEye full APK
         uses: actions/upload-artifact@v4
         with:
-          name: GuardEye-main-debug
-          path: app/build/outputs/apk/main/debug/app-main-debug.apk
+          name: GuardEye-full-debug
+          path: app/build/outputs/apk/full/debug/app-full-debug.apk
           retention-days: 30
 
       - name: Upload GuardEye Light APK
@@ -61,7 +61,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            app/build/outputs/apk/main/debug/app-main-debug.apk
+            app/build/outputs/apk/full/debug/app-full-debug.apk
             app/build/outputs/apk/light/debug/app-light-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

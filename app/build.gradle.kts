@@ -35,9 +35,10 @@ android {
         buildConfig = true
     }
 
-    flavorDimensions += "version"
+    flavorDimensions += listOf("version")
+
     productFlavors {
-        create("main") {
+        create("full") {
             dimension = "version"
             applicationIdSuffix = ""
             resValue("string", "app_name", "GuardEye")
@@ -54,7 +55,7 @@ android {
 }
 
 dependencies {
-    // Shared by both flavors
+    // ── Shared by both flavors ───────────────────────────────────────
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
@@ -62,11 +63,12 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("com.google.android.material:material:1.11.0")
 
-    // Main flavor only
-    "mainImplementation"("androidx.camera:camera-core:1.3.1")
-    "mainImplementation"("androidx.camera:camera-camera2:1.3.1")
-    "mainImplementation"("androidx.camera:camera-lifecycle:1.3.1")
-    "mainImplementation"("androidx.camera:camera-view:1.3.1")
-    "mainImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
-    "mainImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // ── Full flavor only: CameraX + TFLite ────────────────────────────
+    // AGP auto-creates "fullImplementation" from the "full" product flavor
+    "fullImplementation"("androidx.camera:camera-core:1.3.1")
+    "fullImplementation"("androidx.camera:camera-camera2:1.3.1")
+    "fullImplementation"("androidx.camera:camera-lifecycle:1.3.1")
+    "fullImplementation"("androidx.camera:camera-view:1.3.1")
+    "fullImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
+    "fullImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
 }

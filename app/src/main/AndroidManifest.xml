@@ -2,19 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions -->
+    <!-- Permissions shared by both flavors -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Camera — required by both main (CameraX) and light (Camera1) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
@@ -27,47 +26,10 @@
         android:theme="@style/Theme.GuardEye"
         tools:targetApi="34">
 
-        <!-- Main Activity -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:theme="@style/Theme.GuardEye">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <!-- Bot polling service — registered by each flavor -->
+        <!-- See src/full/AndroidManifest.xml (full) and src/light/AndroidManifest.xml (light) -->
 
-        <!-- Bot Foreground Service (Telegram polling) -->
-        <service
-            android:name=".BotService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Camera Foreground Service (capture + AI) -->
-        <service
-            android:name=".CameraService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="camera" />
-
-        <!-- Alarm Receiver (triggered by AlarmManager) -->
-        <receiver
-            android:name=".AlarmReceiver"
-            android:enabled="true"
-            android:exported="false" />
-
-        <!-- Boot Receiver (restore services on boot) -->
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
+        <!-- Boot receiver — registered per flavor -->
 
     </application>
 
