@@ -20,7 +20,11 @@
     <color name="red">#E53935</color>
     <color name="amber">#FFA000</color>
 
-    <!-- Switch track colours -->
+    <!-- Light flavor extras (shared with main) -->
+    <color name="bg">#121212</color>
+    <color name="divider">#2A2A2A</color>
+    <color name="status_red">#E53935</color>
+    <color name="status_green">#43A047</color>
     <color name="switch_track_on">#388E3C</color>
     <color name="switch_track_off">#424242</color>
 </resources>

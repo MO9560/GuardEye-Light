@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="12dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="GuardEye Light"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="v3.0"
+                android:textSize="13sp"
+                android:textColor="@color/text_secondary"/>
+        </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider" android:layout_marginBottom="16dp"/>
+
+        <!-- Bot Config -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="BOT CONFIGURATION"
+            android:textSize="11sp" android:textColor="@color/text_secondary"
+            android:letterSpacing="0.1" android:layout_marginBottom="8dp"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputToken"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Bot Token"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputChatId"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="Chat ID"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Interval -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="MONITORING"
+            android:textSize="11sp" android:textColor="@color/text_secondary"
+            android:letterSpacing="0.1" android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+            <TextView android:id="@+id/textInterval"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="间隔：5 分钟"
+                android:textColor="@color/text_primary" android:textSize="14sp"/>
+            <TextView android:id="@+id/textStatus"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="⏸ 已停止"
+                android:textColor="@color/status_red" android:textSize="14sp"/>
+        </LinearLayout>
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/sliderInterval"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:valueFrom="1" android:valueTo="60" android:stepSize="1"
+            android:value="5" android:layout_marginBottom="16dp"/>
+
+        <!-- Debug -->
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="Debug Mode"
+                android:textColor="@color/text_primary" android:textSize="14sp"/>
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switchDebug"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="@color/divider" android:layout_marginBottom="16dp"/>
+
+        <!-- Actions -->
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginEnd="8dp"
+                android:text="保存"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPhoto"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="拍照"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartStop"
+            android:layout_width="match_parent" android:layout_height="56dp"
+            android:layout_marginTop="8dp"
+            android:text="启动监控"
+            android:textSize="16sp"
+            app:backgroundTint="@color/status_green"/>
+
+        <!-- Commands hint -->
+        <TextView
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Commands: /start /stop /photo /status /interval N /debug /test"
+            android:textSize="12sp" android:textColor="@color/text_secondary"
+            android:lineSpacingExtra="2dp"/>
+
+    </LinearLayout>
+</ScrollView>

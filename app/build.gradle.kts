@@ -34,33 +34,39 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    flavorDimensions += "version"
+    productFlavors {
+        create("main") {
+            dimension = "version"
+            applicationIdSuffix = ""
+            resValue("string", "app_name", "GuardEye")
+            buildConfigField("boolean", "IS_LIGHT", "false")
+        }
+        create("light") {
+            dimension = "version"
+            applicationIdSuffix = ".light"
+            minSdk = 19
+            resValue("string", "app_name", "GuardEye Light")
+            buildConfigField("boolean", "IS_LIGHT", "true")
+        }
+    }
 }
 
 dependencies {
-    // CameraX
-    val cameraxVersion = "1.3.1"
-    implementation("androidx.camera:camera-core:$cameraxVersion")
-    implementation("androidx.camera:camera-camera2:$cameraxVersion")
-    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
-    implementation("androidx.camera:camera-view:$cameraxVersion")
-
-    // Lifecycle
+    // Shared by both flavors
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
-
-    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // TensorFlow Lite
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-
-    // Activity KTX
     implementation("androidx.activity:activity-ktx:1.8.2")
-
-    // Material Design
     implementation("com.google.android.material:material:1.11.0")
+
+    // Main flavor only
+    "mainImplementation"("androidx.camera:camera-core:1.3.1")
+    "mainImplementation"("androidx.camera:camera-camera2:1.3.1")
+    "mainImplementation"("androidx.camera:camera-lifecycle:1.3.1")
+    "mainImplementation"("androidx.camera:camera-view:1.3.1")
+    "mainImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
+    "mainImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
 }
