@@ -64,8 +64,8 @@ class LightBotService : LifecycleService() {
         startForeground(NOTIF_ID, buildNotification())
 
         when (intent?.action) {
-            ACTION_CAPTURE       -> captureAndSend(source = "interval", chatId = null)
-            ACTION_MANUAL_CAPTURE-> captureAndSend(source = "manual",  chatId = Config.chatId)
+            ACTION_CAPTURE        -> captureAndSend(source = "interval", chatId = null)
+            ACTION_MANUAL_CAPTURE -> captureAndSend(source = "ui",      chatId = Config.chatId)
             ACTION_STOP         -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -133,7 +133,7 @@ class LightBotService : LifecycleService() {
             }
             text == "/photo" -> {
                 TelegramBot.sendText(token, chatId, "📸 正在拍照...")
-                captureAndSend(source = "manual", chatId = chatId)
+                captureAndSend(source = "command", chatId = chatId)
             }
             text == "/status" -> {
                 val status = buildStatusText()
@@ -290,7 +290,11 @@ class LightBotService : LifecycleService() {
     }
 
     private fun buildCaption(source: String, time: String, battery: Int): String {
-        val srcLabel = if (source == "interval") "自动拍照" else "手动拍照"
+        val srcLabel = when (source) {
+            "interval" -> "闹钟拍照"
+            "ui"      -> "App按钮拍照"
+            else       -> "命令拍照"
+        }
         val sb = StringBuilder()
         sb.append("📸 GuardEye Light\n")
         sb.append("$time\n")
