@@ -22,3 +22,6 @@ local.properties
 
 # Keep model files in repo (required for release build)
 # *.tflite  <- commented out to include model in repo
+
+# Temp build artifact
+21
