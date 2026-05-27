@@ -291,9 +291,9 @@ class LightBotService : LifecycleService() {
 
     private fun buildCaption(source: String, time: String, battery: Int): String {
         val srcLabel = when (source) {
-            "interval" -> "闹钟拍照"
-            "ui"      -> "App按钮拍照"
-            else       -> "命令拍照"
+            "interval" -> "定时拍照"
+            "ui"      -> "APP拍照"
+            else       -> "TEL拍照"
         }
         val sb = StringBuilder()
         sb.append("📸 GuardEye Light\n")
