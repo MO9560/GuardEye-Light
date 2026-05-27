@@ -60,7 +60,7 @@ class LightBotService : LifecycleService() {
         startForeground(NOTIF_ID, buildNotification())
 
         when (intent?.action) {
-            ACTION_CAPTURE -> captureAndSend(source = "interval")
+            ACTION_CAPTURE -> captureAndSend(source = "interval", chatId = null)
             ACTION_STOP    -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -128,7 +128,7 @@ class LightBotService : LifecycleService() {
             }
             text == "/photo" -> {
                 TelegramBot.sendText(token, chatId, "📸 正在拍照...")
-                captureAndSend(source = "manual")
+                captureAndSend(source = "manual", chatId = chatId)
             }
             text == "/status" -> {
                 val status = buildStatusText()
@@ -158,7 +158,7 @@ class LightBotService : LifecycleService() {
 
     // ── Camera1 Capture ───────────────────────────────────────────────
 
-    private fun captureAndSend(source: String = "interval") {
+    private fun captureAndSend(source: String = "interval", chatId: String? = null) {
         // Guard: prevent concurrent captures (camera cannot be opened twice)
         if (!capturing.compareAndSet(false, true)) {
             Log.w(TAG, "Capture already in progress, skipping")
@@ -166,6 +166,7 @@ class LightBotService : LifecycleService() {
         }
 
         cameraHandler.post {
+            val token = Config.botToken
             try {
                 releaseCamera()
                 val cam = Camera.open()
@@ -205,12 +206,19 @@ class LightBotService : LifecycleService() {
                         processAndSend(data, source)
                     } else {
                         Log.e(TAG, "takePicture returned null/empty data")
+                        if (Config.debugMode && chatId != null) {
+                            TelegramBot.sendText(token, chatId, "🐛 [DEBUG] takePicture returned null/empty data")
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Camera capture failed", e)
                 releaseCamera()
                 capturing.set(false)
+                if (Config.debugMode && chatId != null) {
+                    val msg = "🐛 [DEBUG] Camera 异常：${e.javaClass.simpleName}: ${e.message}"
+                    TelegramBot.sendText(token, chatId, msg)
+                }
             }
         }
     }
