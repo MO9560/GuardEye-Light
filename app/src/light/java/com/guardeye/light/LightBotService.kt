@@ -16,6 +16,9 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleService
 import com.guardeye.BuildConfig
 import com.guardeye.Config
@@ -36,21 +39,26 @@ import java.util.concurrent.Executors
 /**
  * LightBotService — GuardEye Light (CameraX)
  * Merges Telegram polling + CameraX capture into one foreground service.
- * No AI, no TFLite. CameraX handles all camera lifecycle robustly.
+ * CameraX is bound to a custom CameraLifecycleOwner that stays STARTED
+ * independently of the service's foreground/background state.
  */
 class LightBotService : LifecycleService() {
 
-    // ── Telegram polling ──────────────────────────────────────────────
-    private var pollingJob: Job? = null
-    private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
     // ── CameraX ─────────────────────────────────────────────────────
+    // Custom LifecycleOwner that stays STARTED regardless of app foreground state.
+    // This prevents ImageCapture callbacks from being paused when app goes to background.
+    private val cameraLifecycleOwner = CameraLifecycleOwner()
+
     private var imageCapture: ImageCapture? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var capturing = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
+
+    // ── Telegram polling ──────────────────────────────────────────────
+    private var pollingJob: Job? = null
+    private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // ── Foreground notification ─────────────────────────────────────
     private val CHANNEL_ID = "guardeye_light_bot"
@@ -61,11 +69,24 @@ class LightBotService : LifecycleService() {
         super.onCreate()
         Config.init(this)
         createNotificationChannel()
+        // Keep camera lifecycle alive for the lifetime of this service
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                // Service moved to foreground — nothing extra needed
+            }
+            override fun onStop(owner: LifecycleOwner) {
+                // Service moved to background — camera lifecycle stays STARTED via cameraLifecycleOwner
+            }
+            override fun onDestroy(owner: LifecycleOwner) {
+                cameraLifecycleOwner.stop()
+            }
+        })
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         startForeground(NOTIF_ID, buildNotification())
+        cameraLifecycleOwner.start()
 
         when (intent?.action) {
             ACTION_CAPTURE        -> captureAndSend(source = "interval", chatId = null)
@@ -84,6 +105,7 @@ class LightBotService : LifecycleService() {
         cmdScope.cancel()
         captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         shutdownCamera()
+        cameraLifecycleOwner.stop()
         super.onDestroy()
     }
 
@@ -205,7 +227,8 @@ class LightBotService : LifecycleService() {
                     .build()
                 imageCapture = imgCapture
 
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture)
+                // Bind to cameraLifecycleOwner — stays STARTED even when app is in background
+                provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture)
 
                 imgCapture.takePicture(
                     cameraExecutor,
@@ -385,5 +408,30 @@ class LightBotService : LifecycleService() {
         const val ACTION_CAPTURE        = "com.guardeye.light.ACTION_CAPTURE"
         const val ACTION_MANUAL_CAPTURE = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
         const val ACTION_STOP           = "com.guardeye.light.ACTION_STOP"
+    }
+}
+
+/**
+ * A LifecycleOwner that stays STARTED independently of the app's foreground state.
+ * CameraX binds to this so ImageCapture callbacks are never paused when the app
+ * goes to background. The owner is started when the service starts and stopped
+ * when the service is destroyed.
+ */
+private class CameraLifecycleOwner : LifecycleOwner {
+    private val lifecycleRegistry = androidx.lifecycle.LifecycleRegistry(this)
+
+    init {
+        lifecycleRegistry.currentState = androidx.lifecycle.Lifecycle.State.STARTED
+    }
+
+    override val lifecycle: Lifecycle
+        get() = lifecycleRegistry
+
+    fun start() {
+        lifecycleRegistry.currentState = androidx.lifecycle.Lifecycle.State.STARTED
+    }
+
+    fun stop() {
+        lifecycleRegistry.currentState = androidx.lifecycle.Lifecycle.State.DESTROYED
     }
 }
