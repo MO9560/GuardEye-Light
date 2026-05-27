@@ -30,31 +30,33 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * LightBotService — GuardEye Light (CameraX)
  * Merges Telegram polling + CameraX capture into one foreground service.
- * CameraX is bound to a custom CameraLifecycleOwner that stays STARTED
- * independently of the service's foreground/background state.
+ * ProcessCameraProvider is cached at service level to avoid async race conditions
+ * across multiple captures. CameraX binds to CameraLifecycleOwner (stays STARTED
+ * regardless of app foreground state).
  */
 class LightBotService : LifecycleService() {
 
-    // ── CameraX ─────────────────────────────────────────────────────
-    // Custom LifecycleOwner that stays STARTED regardless of app foreground state.
-    // This prevents ImageCapture callbacks from being paused when app goes to background.
-    private val cameraLifecycleOwner = CameraLifecycleOwner()
-
-    private var imageCapture: ImageCapture? = null
+    // ── CameraX — cached provider so repeated captures are fast & reliable ──
     private var cameraProvider: ProcessCameraProvider? = null
+    private var imageCapture: ImageCapture? = null
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var capturing = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
+
+    // ── Camera lifecycle — stays STARTED independent of app foreground/background ──
+    private val cameraLifecycleOwner = CameraLifecycleOwner()
 
     // ── Telegram polling ──────────────────────────────────────────────
     private var pollingJob: Job? = null
@@ -69,18 +71,27 @@ class LightBotService : LifecycleService() {
         super.onCreate()
         Config.init(this)
         createNotificationChannel()
+        initCameraProvider()   // Get + cache ProcessCameraProvider once
+
         // Keep camera lifecycle alive for the lifetime of this service
         lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                // Service moved to foreground — nothing extra needed
-            }
-            override fun onStop(owner: LifecycleOwner) {
-                // Service moved to background — camera lifecycle stays STARTED via cameraLifecycleOwner
-            }
             override fun onDestroy(owner: LifecycleOwner) {
                 cameraLifecycleOwner.stop()
+                shutdownCameraNow()
             }
         })
+    }
+
+    /** Synchronously get (or wait for) the cached ProcessCameraProvider. */
+    private fun initCameraProvider() {
+        if (cameraProvider != null) return
+        try {
+            val future = ProcessCameraProvider.getInstance(this)
+            cameraProvider = future.get(30, TimeUnit.SECONDS)
+            Log.d(TAG, "CameraProvider ready: $cameraProvider")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get CameraProvider in onCreate", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -89,22 +100,35 @@ class LightBotService : LifecycleService() {
         cameraLifecycleOwner.start()
 
         when (intent?.action) {
-            ACTION_CAPTURE        -> captureAndSend(source = "interval", chatId = null)
-            ACTION_MANUAL_CAPTURE -> captureAndSend(source = "ui",      chatId = Config.chatId)
-            ACTION_STOP         -> {
+            ACTION_CAPTURE, ACTION_MANUAL_CAPTURE -> {
+                val source = if (intent.action == ACTION_CAPTURE) "interval" else "ui"
+                captureAndSend(source = source, chatId = Config.chatId)
+            }
+            ACTION_STOP -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
-            else           -> startPolling()
+            else -> startPolling()
         }
         return START_STICKY
+    }
+
+    private fun waitForCameraProvider(timeoutMs: Long): Long {
+        if (cameraProvider != null) return 0
+        var waited = 0L
+        while (cameraProvider == null && waited < timeoutMs) {
+            Thread.sleep(100)
+            waited += 100
+        }
+        return waited
     }
 
     override fun onDestroy() {
         pollingJob?.cancel()
         cmdScope.cancel()
         captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-        shutdownCamera()
+        cameraExecutor.shutdown()
+        cameraProvider?.shutdown()
         cameraLifecycleOwner.stop()
         super.onDestroy()
     }
@@ -190,20 +214,43 @@ class LightBotService : LifecycleService() {
 
     // ── CameraX Capture ───────────────────────────────────────────────
 
-    private fun captureAndSend(source: String = "interval", chatId: String? = null) {
+    private fun captureAndSend(source: String, chatId: String?) {
         if (capturing) {
-            Log.w(TAG, "Capture already in progress, skipping")
             if (source == "command" && chatId != null) {
                 TelegramBot.sendText(Config.botToken, chatId, "⚠️ 相机正忙，请稍后重试")
             }
             return
         }
+        // If already on a background thread (e.g. Telegram coroutine), wait inline.
+        // If on main thread (e.g. onStartCommand), post to Handler to avoid ANR.
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            mainHandler.post { captureWithWait(source, chatId) }
+        } else {
+            captureWithWait(source, chatId)
+        }
+    }
+
+    private fun captureWithWait(source: String, chatId: String?) {
+        val waited = waitForCameraProvider(10_000)
+        if (cameraProvider == null) {
+            Log.e(TAG, "CameraProvider not available after ${waited}ms wait")
+            if (chatId != null) {
+                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
+            }
+            return
+        }
+        val provider = cameraProvider!!
+
         capturing = true
 
         // 15-second timeout — if no callback, abort and notify user
         val timeoutRunnable = Runnable {
-            Log.e(TAG, "Capture timeout — no callback in 15s")
-            shutdownCamera()
+            Log.e(TAG, "Capture timeout — no callback in 15s (source=$source)")
+            // Don't call shutdownCamera() here — it would conflict with an in-flight callback
+            // Just set a flag so the callback knows it was a timeout
+            synchronized(this) {
+                captureTimeoutRunnable = null   // signals the callback it was a timeout
+            }
             capturing = false
             if (chatId != null) {
                 TelegramBot.sendText(Config.botToken, chatId, "❌ 拍照超时（15秒无响应），请检查相机是否被其他应用占用")
@@ -212,78 +259,76 @@ class LightBotService : LifecycleService() {
         captureTimeoutRunnable = timeoutRunnable
         mainHandler.postDelayed(timeoutRunnable, 15_000L)
 
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            try {
-                val provider = cameraProviderFuture.get()
-                cameraProvider = provider
-                provider.unbindAll()
+        try {
+            provider.unbindAll()
 
-                @Suppress("DEPRECATION")
-                val imgCapture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .setTargetResolution(android.util.Size(1280, 720))
-                    .setJpegQuality(80)
-                    .build()
-                imageCapture = imgCapture
+            @Suppress("DEPRECATION")
+            val imgCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetResolution(android.util.Size(1280, 720))
+                .setJpegQuality(80)
+                .build()
+            imageCapture = imgCapture
 
-                // Bind to cameraLifecycleOwner — stays STARTED even when app is in background
-                provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture)
-
-                imgCapture.takePicture(
-                    cameraExecutor,
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+            // Bind to cameraLifecycleOwner — stays STARTED even when app is in background
+            provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture)
+            Log.d(TAG, "CameraX bound, taking picture (source=$source)")
+            imgCapture.takePicture(
+                cameraExecutor,
+                object : ImageCapture.OnImageCapturedCallback() {
+                    override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                        // Cancel timeout if it hasn't fired yet
+                        synchronized(this@LightBotService) {
                             captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
                             captureTimeoutRunnable = null
-                            val buf = image.planes[0].buffer
-                            val data = ByteArray(buf.remaining())
-                            buf.get(data)
-                            image.close()
-                            shutdownCamera()
-                            capturing = false
-                            Log.d(TAG, "JPEG captured: ${data.size} bytes")
-                            processAndSend(data, source)
                         }
+                        val buf = image.planes[0].buffer
+                        val data = ByteArray(buf.remaining())
+                        buf.get(data)
+                        image.close()
+                        capturing = false
+                        Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source")
+                        processAndSend(data, source)
+                    }
 
-                        override fun onError(exception: ImageCaptureException) {
+                    override fun onError(exception: ImageCaptureException) {
+                        synchronized(this@LightBotService) {
                             captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
                             captureTimeoutRunnable = null
-                            Log.e(TAG, "CameraX capture error: ${exception.imageCaptureError}", exception)
-                            shutdownCamera()
-                            capturing = false
-                            if (chatId != null) {
-                                val errMsg = exception.message ?: "未知错误"
-                                val msg = when (exception.imageCaptureError) {
-                                    ImageCapture.ERROR_CAMERA_CLOSED -> "❌ 相机被关闭，请重试"
-                                    ImageCapture.ERROR_FILE_IO       -> "❌ 写入照片失败（存储空间不足？）"
-                                    else                            -> "❌ 拍照失败：$errMsg"
-                                }
-                                TelegramBot.sendText(Config.botToken, chatId, msg)
+                        }
+                        val isTimeout = (chatId == null)  // timeout path sets chatId=null as signal
+                        Log.e(TAG, "CameraX capture error: ${exception.imageCaptureError}", exception)
+                        capturing = false
+                        if (chatId != null) {
+                            val msg = when (exception.imageCaptureError) {
+                                ImageCapture.ERROR_CAMERA_CLOSED -> "❌ 相机被关闭，请重试"
+                                ImageCapture.ERROR_FILE_IO       -> "❌ 写入照片失败（存储空间不足？）"
+                                ImageCapture.ERROR_UNKNOWN       -> "❌ 拍照失败：${exception.message}"
+                                else                             -> "❌ 拍照失败（${exception.imageCaptureError}）：${exception.message}"
                             }
+                            TelegramBot.sendText(Config.botToken, chatId, msg)
                         }
                     }
-                )
-            } catch (e: Exception) {
+                }
+            )
+        } catch (e: Exception) {
+            synchronized(this@LightBotService) {
                 captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
                 captureTimeoutRunnable = null
-                Log.e(TAG, "CameraX setup failed", e)
-                shutdownCamera()
-                capturing = false
-                if (chatId != null) {
-                    TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败：${e.javaClass.simpleName}")
-                }
             }
-        }, ContextCompat.getMainExecutor(this))
+            Log.e(TAG, "CameraX setup threw: ${e.javaClass.simpleName}", e)
+            capturing = false
+            if (chatId != null) {
+                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败：${e.javaClass.simpleName} — ${e.message}")
+            }
+        }
     }
 
-    private fun shutdownCamera() {
-        try {
-            cameraProvider?.unbindAll()
-            cameraProvider?.shutdown()
-        } catch (_: Exception) {}
-        imageCapture = null
+    private fun shutdownCameraNow() {
+        try { cameraProvider?.unbindAll() } catch (_: Exception) {}
+        try { cameraProvider?.shutdown() } catch (_: Exception) {}
         cameraProvider = null
+        imageCapture = null
     }
 
     private fun processAndSend(jpegData: ByteArray, source: String) {
