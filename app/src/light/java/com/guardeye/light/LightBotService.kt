@@ -159,26 +159,40 @@ class LightBotService : LifecycleService() {
 
     private fun captureAndSend(source: String = "interval") {
         cameraHandler.post {
+            var cam: Camera? = null
             try {
-                camera = Camera.open()
-                val params = camera!!.parameters
+                cam = Camera.open()
+                val params = cam.parameters
                 params.pictureFormat = ImageFormat.JPEG
-                params.setPreviewSize(1280, 720)
-                camera!!.parameters = params
-                camera!!.setErrorCallback { _, err ->
-                    Log.e(TAG, "Camera error: $err")
+
+                // Try 1280×720, fall back to largest available if unsupported
+                val sizes = params.supportedPreviewSizes
+                val targetW = 1280
+                val targetH = 720
+                val best = sizes.find { it.width == targetW && it.height == targetH }
+                    ?: sizes.maxByOrNull { it.width * it.height }
+                if (best != null) {
+                    params.setPreviewSize(best.width, best.height)
+                    Log.d(TAG, "Preview size: ${best.width}×${best.height}")
                 }
-                camera!!.takePicture(null, null) { data, _ ->
-                    camera?.release()
-                    camera = null
-                    if (data != null) {
+
+                cam.parameters = params
+                cam.setErrorCallback { _, err ->
+                    Log.e(TAG, "Camera error code: $err")
+                }
+
+                cam.takePicture(null, null) { data, _ ->
+                    cam?.release()
+                    if (data != null && data.isNotEmpty()) {
+                        Log.d(TAG, "JPEG captured: ${data.size} bytes")
                         processAndSend(data, source)
+                    } else {
+                        Log.e(TAG, "takePicture returned null/empty data")
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Camera capture failed", e)
-                camera?.release()
-                camera = null
+                cam?.release()
             }
         }
     }
@@ -198,9 +212,12 @@ class LightBotService : LifecycleService() {
                 }
 
                 val caption = buildCaption(source, now, battery)
+                Log.d(TAG, "Sending photo to Telegram: ${jpegData.size} bytes, caption: $caption")
                 val sendResult = TelegramBot.sendPhoto(token, chatId, jpegData, caption)
                 if (sendResult.isFailure) {
                     Log.e(TAG, "sendPhoto failed: ${sendResult.exceptionOrNull()?.message}")
+                } else {
+                    Log.d(TAG, "Photo sent successfully")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "processAndSend error", e)

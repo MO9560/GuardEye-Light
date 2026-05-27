@@ -3,6 +3,7 @@ package com.guardeye.light
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.guardeye.Config
 
@@ -28,15 +29,21 @@ class LightAlarmReceiver : BroadcastReceiver() {
             val pi = android.app.PendingIntent.getBroadcast(
                 ctx, REQUEST_CODE,
                 intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             val triggerAt = System.currentTimeMillis() + intervalMinutes * 60 * 1000L
-            try {
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (am.canScheduleExactAlarms()) {
+                    am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    Log.d(TAG, "Alarm scheduled (exact): in ${intervalMinutes}min")
+                } else {
+                    am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    Log.w(TAG, "Alarm scheduled (inexact — SCHEDULE_EXACT_ALARM not granted): in ${intervalMinutes}min")
+                }
+            } else {
                 am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
-                Log.d(TAG, "Alarm scheduled in ${intervalMinutes}min")
-            } catch (e: SecurityException) {
-                Log.e(TAG, "SCHEDULE_EXACT_ALARM denied — falling back to inexact alarm", e)
-                am.set(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                Log.d(TAG, "Alarm scheduled: in ${intervalMinutes}min")
             }
         }
 
