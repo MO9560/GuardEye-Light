@@ -47,7 +47,7 @@ android {
         create("light") {
             dimension = "version"
             applicationIdSuffix = ".light"
-            minSdk = 19
+            minSdk = 21
             resValue("string", "app_name", "GuardEye Light")
             buildConfigField("boolean", "IS_LIGHT", "true")
         }
@@ -69,6 +69,11 @@ dependencies {
     "fullImplementation"("androidx.camera:camera-camera2:1.3.1")
     "fullImplementation"("androidx.camera:camera-lifecycle:1.3.1")
     "fullImplementation"("androidx.camera:camera-view:1.3.1")
+
+    // ── Light flavor only: CameraX (replaces deprecated Camera1) ──────
+    "lightImplementation"("androidx.camera:camera-core:1.3.1")
+    "lightImplementation"("androidx.camera:camera-camera2:1.3.1")
+    "lightImplementation"("androidx.camera:camera-lifecycle:1.3.1")
     "fullImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
     "fullImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
 }

@@ -5,14 +5,15 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.ImageFormat
-import android.hardware.Camera
 import android.os.BatteryManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import com.guardeye.BuildConfig
 import com.guardeye.Config
@@ -27,11 +28,13 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
- * LightBotService — GuardEye Light (HM 1S compatible)
- * Merges Telegram polling + Camera1 capture into one foreground service.
- * No AI, no TFLite, no CameraX. Works on minSdk 19.
+ * LightBotService — GuardEye Light (CameraX)
+ * Merges Telegram polling + CameraX capture into one foreground service.
+ * No AI, no TFLite. CameraX handles all camera lifecycle robustly.
  */
 class LightBotService : LifecycleService() {
 
@@ -39,10 +42,11 @@ class LightBotService : LifecycleService() {
     private var pollingJob: Job? = null
     private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // ── Camera ───────────────────────────────────────────────────────
-    private var camera: Camera? = null
-    private val cameraHandler = Handler(Looper.getMainLooper())
-    private val capturing = java.util.concurrent.atomic.AtomicBoolean(false)
+    // ── CameraX ─────────────────────────────────────────────────────
+    private var imageCapture: ImageCapture? = null
+    private var cameraProvider: ProcessCameraProvider? = null
+    private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var capturing = false
 
     // ── Foreground notification ─────────────────────────────────────
     private val CHANNEL_ID = "guardeye_light_bot"
@@ -73,7 +77,7 @@ class LightBotService : LifecycleService() {
     override fun onDestroy() {
         pollingJob?.cancel()
         cmdScope.cancel()
-        releaseCamera()
+        shutdownCamera()
         super.onDestroy()
     }
 
@@ -156,76 +160,91 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    // ── Camera1 Capture ───────────────────────────────────────────────
+    // ── CameraX Capture ───────────────────────────────────────────────
 
     private fun captureAndSend(source: String = "interval", chatId: String? = null) {
-        // Guard: prevent concurrent captures (camera cannot be opened twice)
-        if (!capturing.compareAndSet(false, true)) {
+        if (capturing) {
             Log.w(TAG, "Capture already in progress, skipping")
             return
         }
+        capturing = true
 
-        cameraHandler.post {
-            val token = Config.botToken
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
             try {
-                releaseCamera()
-                val cam = Camera.open()
-                camera = cam
-                val params = cam.parameters
-                params.pictureFormat = ImageFormat.JPEG
+                val provider = cameraProviderFuture.get()
+                cameraProvider = provider
 
-                // Picture size: ≤1920×1080, else smallest available
-                val picSizes = params.supportedPictureSizes
-                val picBest = picSizes.find { it.width <= 1920 && it.height <= 1080 }
-                    ?: picSizes.lastOrNull()
-                if (picBest != null) {
-                    params.setPictureSize(picBest.width, picBest.height)
-                    Log.d(TAG, "Picture size: ${picBest.width}×${picBest.height}")
-                }
+                // Unbind any existing use cases
+                provider.unbindAll()
 
-                // Preview size: ≤1280×720, else first available
-                val preSizes = params.supportedPreviewSizes
-                val preBest = preSizes.find { it.width <= 1280 && it.height <= 720 }
-                    ?: preSizes.firstOrNull()
-                if (preBest != null) {
-                    params.setPreviewSize(preBest.width, preBest.height)
-                    Log.d(TAG, "Preview size: ${preBest.width}×${preBest.height}")
-                }
+                // ImageCapture — target 1280×720, JPEG quality 80
+                @Suppress("DEPRECATION")
+                val imgCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetResolution(android.util.Size(1280, 720))
+                    .setJpegQuality(80)
+                    .build()
+                imageCapture = imgCapture
 
-                params.jpegQuality = 80
-                cam.parameters = params
-                cam.setErrorCallback { _, err ->
-                    Log.e(TAG, "Camera error code: $err")
-                }
+                // Bind to lifecycle (this service is a LifecycleService)
+                provider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    imgCapture
+                )
 
-                cam.takePicture(null, null) { data, _ ->
-                    releaseCamera()
-                    capturing.set(false)
-                    if (data != null && data.isNotEmpty()) {
-                        Log.d(TAG, "JPEG captured: ${data.size} bytes")
-                        processAndSend(data, source)
-                    } else {
-                        Log.e(TAG, "takePicture returned null/empty data")
-                        if (Config.debugMode && chatId != null) {
-                            TelegramBot.sendText(token, chatId, "🐛 [DEBUG] takePicture returned null/empty data")
+                // Take picture
+                imgCapture.takePicture(
+                    cameraExecutor,
+                    object : ImageCapture.OnImageCapturedCallback() {
+                        override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                            val buf = image.planes[0].buffer
+                            val data = ByteArray(buf.remaining())
+                            buf.get(data)
+                            image.close()
+                            shutdownCamera()
+                            capturing = false
+                            Log.d(TAG, "JPEG captured: ${data.size} bytes")
+                            processAndSend(data, source)
+                        }
+
+                        override fun onError(exception: ImageCaptureException) {
+                            Log.e(TAG, "CameraX capture error code: ${exception.imageCaptureError}", exception)
+                            shutdownCamera()
+                            capturing = false
+                            if (Config.debugMode && chatId != null) {
+                                val token = Config.botToken
+                                TelegramBot.sendText(
+                                    token, chatId,
+                                    "🐛 [DEBUG] CameraX 异常：${exception.imageCaptureError}: ${exception.message}"
+                                )
+                            }
                         }
                     }
-                }
+                )
             } catch (e: Exception) {
-                Log.e(TAG, "Camera capture failed", e)
-                releaseCamera()
-                capturing.set(false)
+                Log.e(TAG, "CameraX setup failed", e)
+                shutdownCamera()
+                capturing = false
                 if (Config.debugMode && chatId != null) {
-                    val msg = "🐛 [DEBUG] Camera 异常：${e.javaClass.simpleName}: ${e.message}"
-                    TelegramBot.sendText(token, chatId, msg)
+                    val token = Config.botToken
+                    TelegramBot.sendText(
+                        token, chatId,
+                        "🐛 [DEBUG] CameraX 异常：${e.javaClass.simpleName}: ${e.message}"
+                    )
                 }
             }
-        }
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun releaseCamera() {
-        try { camera?.release() } catch (_: Exception) {}
-        camera = null
+    private fun shutdownCamera() {
+        try {
+            cameraProvider?.unbindAll()
+            cameraProvider?.shutdown()
+        } catch (_: Exception) {}
+        imageCapture = null
+        cameraProvider = null
     }
 
     private fun processAndSend(jpegData: ByteArray, source: String) {
@@ -247,11 +266,24 @@ class LightBotService : LifecycleService() {
                 val sendResult = TelegramBot.sendPhoto(token, chatId, jpegData, caption)
                 if (sendResult.isFailure) {
                     Log.e(TAG, "sendPhoto failed: ${sendResult.exceptionOrNull()?.message}")
+                    if (Config.debugMode && chatId.isNotBlank()) {
+                        TelegramBot.sendText(
+                            token, chatId,
+                            "🐛 [DEBUG] sendPhoto 失败：${sendResult.exceptionOrNull()?.message}"
+                        )
+                    }
                 } else {
                     Log.d(TAG, "Photo sent successfully")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "processAndSend error", e)
+                if (Config.debugMode) {
+                    val token = Config.botToken
+                    val chatId = Config.chatId
+                    if (chatId.isNotBlank()) {
+                        TelegramBot.sendText(token, chatId, "🐛 [DEBUG] processAndSend：${e.message}")
+                    }
+                }
             }
         }
     }
@@ -269,7 +301,7 @@ class LightBotService : LifecycleService() {
             sb.append("\n🤖 Bot：✅")
             sb.append("\n🔋 电量：$battery%")
             sb.append("\n⏱ 拍照间隔：${Config.intervalMinutes}min")
-            sb.append("\n📐 分辨率：1280×720")
+            sb.append("\n📐 分辨率：CameraX 1280×720")
             sb.append("\n🐛 调试：✅")
             sb.append("\n🤖 版本：${BuildConfig.VERSION_NAME}")
         }
@@ -295,7 +327,7 @@ class LightBotService : LifecycleService() {
         if (Config.debugMode) {
             sb.append("─────────────────\n")
             sb.append("🔋 电量：").append(getBatteryLevel()).append("%\n")
-            sb.append("📐 分辨率：1280×720\n")
+            sb.append("📐 相机：CameraX\n")
             sb.append("🤖 版本：").append(BuildConfig.VERSION_NAME).append("\n")
             sb.append("🤖 模型：N/A（Light版）")
         }
