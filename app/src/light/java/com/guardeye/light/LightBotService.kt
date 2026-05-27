@@ -165,16 +165,27 @@ class LightBotService : LifecycleService() {
                 val params = cam.parameters
                 params.pictureFormat = ImageFormat.JPEG
 
-                // Try 1280×720, fall back to largest available if unsupported
-                val sizes = params.supportedPreviewSizes
-                val targetW = 1280
-                val targetH = 720
-                val best = sizes.find { it.width == targetW && it.height == targetH }
-                    ?: sizes.maxByOrNull { it.width * it.height }
-                if (best != null) {
-                    params.setPreviewSize(best.width, best.height)
-                    Log.d(TAG, "Preview size: ${best.width}×${best.height}")
+                // pick best picture size (use for takePicture output)
+                val picSizes = params.supportedPictureSizes
+                // prefer ≤ 1920×1080, else smallest available
+                val picBest = picSizes.find { it.width <= 1920 && it.height <= 1080 }
+                    ?: picSizes.lastOrNull()
+                picBest?.let {
+                    params.setPictureSize(it.width, it.height)
+                    Log.d(TAG, "Picture size: ${it.width}×${it.height}")
                 }
+
+                // pick preview size (preview surface + previewCallback buffer)
+                val preSizes = params.supportedPreviewSizes
+                val preBest = preSizes.find { it.width <= 1280 && it.height <= 720 }
+                    ?: preSizes.firstOrNull()
+                preBest?.let {
+                    params.setPreviewSize(it.width, it.height)
+                    Log.d(TAG, "Preview size: ${it.width}×${it.height}")
+                }
+
+                // set JPEG quality to 80 to reduce size
+                params.jpegQuality = 80
 
                 cam.parameters = params
                 cam.setErrorCallback { _, err ->
@@ -183,6 +194,7 @@ class LightBotService : LifecycleService() {
 
                 cam.takePicture(null, null) { data, _ ->
                     cam?.release()
+                    cam = null
                     if (data != null && data.isNotEmpty()) {
                         Log.d(TAG, "JPEG captured: ${data.size} bytes")
                         processAndSend(data, source)
@@ -193,6 +205,7 @@ class LightBotService : LifecycleService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Camera capture failed", e)
                 cam?.release()
+                cam = null
             }
         }
     }
