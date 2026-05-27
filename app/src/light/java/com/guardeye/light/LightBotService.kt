@@ -64,8 +64,9 @@ class LightBotService : LifecycleService() {
         startForeground(NOTIF_ID, buildNotification())
 
         when (intent?.action) {
-            ACTION_CAPTURE -> captureAndSend(source = "interval", chatId = null)
-            ACTION_STOP    -> {
+            ACTION_CAPTURE       -> captureAndSend(source = "interval", chatId = null)
+            ACTION_MANUAL_CAPTURE-> captureAndSend(source = "manual",  chatId = Config.chatId)
+            ACTION_STOP         -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -364,7 +365,8 @@ class LightBotService : LifecycleService() {
 
     companion object {
         private const val TAG = "LightBotService"
-        const val ACTION_CAPTURE = "com.guardeye.light.ACTION_CAPTURE"
-        const val ACTION_STOP    = "com.guardeye.light.ACTION_STOP"
+        const val ACTION_CAPTURE        = "com.guardeye.light.ACTION_CAPTURE"
+        const val ACTION_MANUAL_CAPTURE = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
+        const val ACTION_STOP           = "com.guardeye.light.ACTION_STOP"
     }
 }

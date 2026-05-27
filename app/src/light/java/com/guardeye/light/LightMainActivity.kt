@@ -104,7 +104,7 @@ class LightMainActivity : AppCompatActivity() {
             if (!validateConfig()) return@setOnClickListener
             saveConfig()
             val svc = Intent(this, LightBotService::class.java).apply {
-                action = LightBotService.ACTION_CAPTURE
+                action = LightBotService.ACTION_MANUAL_CAPTURE
             }
             startForegroundService(svc)
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
