@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+
+
 android {
     namespace = "com.guardeye"
     compileSdk = 34
@@ -15,9 +17,36 @@ android {
         versionName = "3.0.0"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            if (file("signing.properties").exists()) {
+                val props = mapOf<String, String>()
+                file("signing.properties").readLines().forEach { line ->
+                    val parts = line.split("=", limit = 2)
+                    if (parts.size == 2) {
+                        when (parts[0].trim()) {
+                            "storeFile" -> storeFile = file(parts[1].trim())
+                            "storePassword" -> storePassword = parts[1].trim()
+                            "keyAlias" -> keyAlias = parts[1].trim()
+                            "keyPassword" -> keyPassword = parts[1].trim()
+                        }
+                    }
+                }
+            } else {
+                storeFile = file("guard-eye.jks")
+                storePassword = "GuardEye2026"
+                keyAlias = "guard-eye"
+                keyPassword = "GuardEye2026"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

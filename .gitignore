@@ -25,3 +25,11 @@ local.properties
 
 # Temp build artifact
 21
+
+# Signing (contains secrets — generated locally / by GitHub Actions)
+signing.properties
+app/signing.properties
+guard-eye.jks
+guard-eye.keystore
+guard-eye.b64
+guard-eye-clean.b64
