@@ -18,6 +18,10 @@ class LightAlarmReceiver : BroadcastReceiver() {
             action = LightBotService.ACTION_CAPTURE
         }
         ctx.startForegroundService(i)
+
+        // Re-schedule the next alarm immediately so captures repeat
+        val interval = Config.intervalMinutes
+        scheduleAlarm(ctx, interval)
     }
 
     companion object {
