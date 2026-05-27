@@ -42,6 +42,7 @@ class LightBotService : LifecycleService() {
     // ── Camera ───────────────────────────────────────────────────────
     private var camera: Camera? = null
     private val cameraHandler = Handler(Looper.getMainLooper())
+    private val capturing = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // ── Foreground notification ─────────────────────────────────────
     private val CHANNEL_ID = "guardeye_light_bot"
@@ -158,43 +159,47 @@ class LightBotService : LifecycleService() {
     // ── Camera1 Capture ───────────────────────────────────────────────
 
     private fun captureAndSend(source: String = "interval") {
+        // Guard: prevent concurrent captures (camera cannot be opened twice)
+        if (!capturing.compareAndSet(false, true)) {
+            Log.w(TAG, "Capture already in progress, skipping")
+            return
+        }
+
         cameraHandler.post {
-            var cam: Camera? = null
             try {
-                cam = Camera.open()
+                releaseCamera()
+                val cam = Camera.open()
+                camera = cam
                 val params = cam.parameters
                 params.pictureFormat = ImageFormat.JPEG
 
-                // pick best picture size (use for takePicture output)
+                // Picture size: ≤1920×1080, else smallest available
                 val picSizes = params.supportedPictureSizes
-                // prefer ≤ 1920×1080, else smallest available
                 val picBest = picSizes.find { it.width <= 1920 && it.height <= 1080 }
                     ?: picSizes.lastOrNull()
-                picBest?.let {
-                    params.setPictureSize(it.width, it.height)
-                    Log.d(TAG, "Picture size: ${it.width}×${it.height}")
+                if (picBest != null) {
+                    params.setPictureSize(picBest.width, picBest.height)
+                    Log.d(TAG, "Picture size: ${picBest.width}×${picBest.height}")
                 }
 
-                // pick preview size (preview surface + previewCallback buffer)
+                // Preview size: ≤1280×720, else first available
                 val preSizes = params.supportedPreviewSizes
                 val preBest = preSizes.find { it.width <= 1280 && it.height <= 720 }
                     ?: preSizes.firstOrNull()
-                preBest?.let {
-                    params.setPreviewSize(it.width, it.height)
-                    Log.d(TAG, "Preview size: ${it.width}×${it.height}")
+                if (preBest != null) {
+                    params.setPreviewSize(preBest.width, preBest.height)
+                    Log.d(TAG, "Preview size: ${preBest.width}×${preBest.height}")
                 }
 
-                // set JPEG quality to 80 to reduce size
                 params.jpegQuality = 80
-
                 cam.parameters = params
                 cam.setErrorCallback { _, err ->
                     Log.e(TAG, "Camera error code: $err")
                 }
 
                 cam.takePicture(null, null) { data, _ ->
-                    cam?.release()
-                    cam = null
+                    releaseCamera()
+                    capturing.set(false)
                     if (data != null && data.isNotEmpty()) {
                         Log.d(TAG, "JPEG captured: ${data.size} bytes")
                         processAndSend(data, source)
@@ -204,10 +209,15 @@ class LightBotService : LifecycleService() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Camera capture failed", e)
-                cam?.release()
-                cam = null
+                releaseCamera()
+                capturing.set(false)
             }
         }
+    }
+
+    private fun releaseCamera() {
+        try { camera?.release() } catch (_: Exception) {}
+        camera = null
     }
 
     private fun processAndSend(jpegData: ByteArray, source: String) {
@@ -291,11 +301,6 @@ class LightBotService : LifecycleService() {
             val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
             (level * 100 / scale)
         } catch (e: Exception) { -1 }
-    }
-
-    private fun releaseCamera() {
-        try { camera?.release() } catch (_: Exception) { }
-        camera = null
     }
 
     // ── Notification ──────────────────────────────────────────────────
