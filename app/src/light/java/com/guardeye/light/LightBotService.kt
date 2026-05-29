@@ -53,6 +53,7 @@ class LightBotService : LifecycleService() {
     private var capturing = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
+    private var cameraReady = false  // true when ImageCapture is bound and ready
 
     // ── Lifecycle — stays STARTED even when app is in background ──────
     private val cameraLifecycleOwner = CameraLifecycleOwner()
@@ -86,30 +87,42 @@ class LightBotService : LifecycleService() {
             }
         })
 
-        // Initialize camera once at startup — bound for the service lifetime
+        // Initialize camera once at startup — matches SentinelService pattern:
+        // all CameraX calls run on main thread via addListener callback
         initCameraProvider()
-        bindImageCapture()
     }
 
-    /** Cache ProcessCameraProvider synchronously (safe here since onCreate runs on main thread). */
+    /**
+     * Initialize ProcessCameraProvider using addListener (SentinelService pattern).
+     * All CameraX operations happen inside the callback on the main thread.
+     */
     private fun initCameraProvider() {
-        if (cameraProvider != null) return
-        try {
-            val future = ProcessCameraProvider.getInstance(this)
-            cameraProvider = future.get(30, TimeUnit.SECONDS)
-            Log.d(TAG, "CameraProvider ready: $cameraProvider")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to get CameraProvider in onCreate", e)
-        }
-    }
-
-    /** Create ImageCapture and bind to cameraLifecycleOwner once. Safe to call repeatedly. */
-    private fun bindImageCapture() {
-        val provider = cameraProvider ?: return
-        if (imageCapture != null) {
-            cameraLifecycleOwner.start()
+        if (cameraProvider != null) {
+            bindImageCapture()
             return
         }
+        Log.d(TAG, "[main] initCameraProvider — requesting ProcessCameraProvider")
+        val future = ProcessCameraProvider.getInstance(this)
+        // Callback runs on main thread (ContextCompat.getMainExecutor) — matches SentinelService
+        future.addListener({
+            try {
+                cameraProvider = future.get()
+                Log.d(TAG, "[main] ProcessCameraProvider ready")
+                bindImageCapture()
+            } catch (e: Exception) {
+                Log.e(TAG, "[main] ProcessCameraProvider.get() failed", e)
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * Build ImageCapture and bind to cameraLifecycleOwner.
+     * Called from initCameraProvider's callback — runs on main thread.
+     */
+    private fun bindImageCapture() {
+        val provider = cameraProvider ?: return
+        if (cameraReady) return  // already bound
+
         @Suppress("DEPRECATION")
         val imgCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
@@ -117,14 +130,17 @@ class LightBotService : LifecycleService() {
             .setJpegQuality(80)
             .build()
         imageCapture = imgCapture
+
         try {
             provider.unbindAll()
             provider.bindToLifecycle(
                 cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture
             )
-            Log.d(TAG, "ImageCapture bound to cameraLifecycleOwner")
+            cameraReady = true
+            cameraLifecycleOwner.start()
+            Log.d(TAG, "[main] ImageCapture bound to cameraLifecycleOwner — camera ready")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to bind ImageCapture", e)
+            Log.e(TAG, "[main] Failed to bind ImageCapture", e)
         }
     }
 
@@ -254,7 +270,11 @@ class LightBotService : LifecycleService() {
         }
         // All CameraX calls on main thread — required by CameraX contract
         mainHandler.post {
-            if (imageCapture == null) bindImageCapture()
+            // If camera not ready yet, trigger init; capture will succeed once bound
+            if (!cameraReady) {
+                Log.d(TAG, "Camera not ready — forcing init from capture path")
+                initCameraProvider()
+            }
             captureWithWait(source, chatId)
         }
     }
@@ -338,6 +358,7 @@ class LightBotService : LifecycleService() {
         try { cameraProvider?.shutdown() } catch (_: Exception) {}
         cameraProvider = null
         imageCapture = null
+        cameraReady = false
     }
 
     // ── Send Photo to Telegram ─────────────────────────────────────────
