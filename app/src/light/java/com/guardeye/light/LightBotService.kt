@@ -34,9 +34,11 @@ import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * LightBotService — GuardEye Light (CameraX)
@@ -230,18 +232,62 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    private fun captureWithWait(source: String, chatId: String?) {
-        // Ensure cameraProvider is initialized (may not have been set if onCreate hadn't finished)
-        if (cameraProvider == null) {
-            Log.d(TAG, "cameraProvider not ready — initializing now")
+    /**
+     * Initialize cameraProvider on the main thread (CameraX requirement).
+     * Calls back to the main thread, waits for the ListenableFuture to resolve,
+     * then stores the real ProcessCameraProvider in cameraProvider.
+     * Returns true if init succeeded, false otherwise.
+     */
+    private fun syncInitCamera(): Boolean {
+        val latch = CountDownLatch(1)
+        val ok = AtomicBoolean(false)
+        mainHandler.post {
             try {
-                val future = ProcessCameraProvider.getInstance(this)
-                cameraProvider = future.get(10, TimeUnit.SECONDS)
-                cameraLifecycleOwner.start()
+                if (cameraProvider != null) {
+                    ok.set(true)
+                    latch.countDown()
+                    return@post
+                }
+                Log.d(TAG, "[main] initializing cameraProvider now")
+                val future = ProcessCameraProvider.getInstance(this@LightBotService)
+                future.addListener({
+                    try {
+                        cameraProvider = future.get()
+                        cameraLifecycleOwner.start()
+                        Log.d(TAG, "[main] cameraProvider ready: $cameraProvider")
+                        ok.set(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[main] future.get() failed", e)
+                        ok.set(false)
+                    } finally {
+                        latch.countDown()
+                    }
+                }, ContextCompat.getMainExecutor(this@LightBotService))
             } catch (e: Exception) {
-                Log.e(TAG, "CameraProvider init failed in captureWithWait", e)
+                Log.e(TAG, "[main] syncInitCamera failed", e)
+                ok.set(false)
+                latch.countDown()
+            }
+        }
+        try {
+            if (!latch.await(15, TimeUnit.SECONDS)) {
+                Log.e(TAG, "syncInitCamera timed out")
+                return false
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return false
+        }
+        return ok.get()
+    }
+
+    private fun captureWithWait(source: String, chatId: String?) {
+        // Ensure cameraProvider is initialized on the main thread (CameraX requirement)
+        if (cameraProvider == null) {
+            Log.d(TAG, "cameraProvider not ready — syncing to main thread for init")
+            if (!syncInitCamera()) {
                 if (chatId != null) {
-                    TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败：${e.message}")
+                    TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
                 }
                 return
             }
