@@ -45,12 +45,19 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Camera Foreground Service (capture + AI) -->
+        <!-- Camera Foreground Service (one-shot capture for /photo) -->
         <service
             android:name=".CameraService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="camera" />
+
+        <!-- SentinelService — GuardEye v4.0 continuous AI surveillance -->
+        <service
+            android:name=".SentinelService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|camera" />
 
         <!-- Alarm Receiver (triggered by AlarmManager) -->
         <receiver

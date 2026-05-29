@@ -57,7 +57,7 @@ class LightAlarmReceiver : BroadcastReceiver() {
             val pi = android.app.PendingIntent.getBroadcast(
                 ctx, REQUEST_CODE,
                 intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             am.cancel(pi)
             Log.d(TAG, "Alarm cancelled")

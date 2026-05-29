@@ -16,6 +16,7 @@ object Config {
     private const val KEY_LAST_INTERVAL_CAPTURE = "last_interval_capture"
     private const val KEY_LAST_MANUAL_CAPTURE  = "last_manual_capture"
     private const val KEY_CAPTURE_SOURCE       = "last_capture_source"
+    private const val KEY_ALERT_MODE             = "alert_mode"
 
     private lateinit var prefs: SharedPreferences
 
@@ -70,6 +71,10 @@ object Config {
     var lastCaptureSource: String
         get() = prefs.getString(KEY_CAPTURE_SOURCE, "manual") ?: "manual"
         set(v) = prefs.edit().putString(KEY_CAPTURE_SOURCE, v).apply()
+
+    var alertMode: String
+        get() = prefs.getString(KEY_ALERT_MODE, "photo") ?: "photo"
+        set(v) = prefs.edit().putString(KEY_ALERT_MODE, v).apply()
 
     val isConfigured: Boolean
         get() = botToken.isNotBlank() && chatId.isNotBlank()

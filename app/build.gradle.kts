@@ -98,11 +98,14 @@ dependencies {
     "fullImplementation"("androidx.camera:camera-camera2:1.3.1")
     "fullImplementation"("androidx.camera:camera-lifecycle:1.3.1")
     "fullImplementation"("androidx.camera:camera-view:1.3.1")
+    // ImageAnalysis is included in camera-core — no separate artifact needed
+    "fullImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
+    "fullImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // Gson for JSON serialization (rolling buffer metadata, face vectors)
+    "fullImplementation"("com.google.code.gson:gson:2.10.1")
 
     // ── Light flavor only: CameraX (replaces deprecated Camera1) ──────
     "lightImplementation"("androidx.camera:camera-core:1.3.1")
     "lightImplementation"("androidx.camera:camera-camera2:1.3.1")
     "lightImplementation"("androidx.camera:camera-lifecycle:1.3.1")
-    "fullImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
-    "fullImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
 }
