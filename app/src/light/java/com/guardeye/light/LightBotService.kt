@@ -231,13 +231,20 @@ class LightBotService : LifecycleService() {
     }
 
     private fun captureWithWait(source: String, chatId: String?) {
-        val waited = waitForCameraProvider(10_000)
+        // Ensure cameraProvider is initialized (may not have been set if onCreate hadn't finished)
         if (cameraProvider == null) {
-            Log.e(TAG, "CameraProvider not available after ${waited}ms wait")
-            if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
+            Log.d(TAG, "cameraProvider not ready — initializing now")
+            try {
+                val future = ProcessCameraProvider.getInstance(this)
+                cameraProvider = future.get(10, TimeUnit.SECONDS)
+                cameraLifecycleOwner.start()
+            } catch (e: Exception) {
+                Log.e(TAG, "CameraProvider init failed in captureWithWait", e)
+                if (chatId != null) {
+                    TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败：${e.message}")
+                }
+                return
             }
-            return
         }
         val provider = cameraProvider!!
 
