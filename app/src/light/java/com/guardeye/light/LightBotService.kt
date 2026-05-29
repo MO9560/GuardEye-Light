@@ -7,9 +7,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
-import android.os.PowerManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -31,26 +31,22 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * LightBotService — GuardEye Light (CameraX)
- * Merges Telegram polling + CameraX capture into one foreground service.
- * ProcessCameraProvider is cached at service level to avoid async race conditions
- * across multiple captures. CameraX binds to CameraLifecycleOwner (stays STARTED
- * regardless of app foreground state).
+ * Telegram polling + CameraX capture in one foreground service.
+ * ImageCapture is bound once at startup and reused for all captures.
+ * CameraLifecycleOwner stays STARTED independent of app foreground state.
  */
 class LightBotService : LifecycleService() {
 
-    // ── CameraX — cached provider so repeated captures are fast & reliable ──
+    // ── CameraX — bound once, reused for all captures ─────────────────
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageCapture: ImageCapture? = null
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -58,10 +54,10 @@ class LightBotService : LifecycleService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
 
-    // ── Camera lifecycle — stays STARTED independent of app foreground/background ──
+    // ── Lifecycle — stays STARTED even when app is in background ──────
     private val cameraLifecycleOwner = CameraLifecycleOwner()
 
-    // ── Telegram polling ──────────────────────────────────────────────
+    // ── Telegram polling — protected by WakeLock so it works when screen off ─
     private var pollingJob: Job? = null
     private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val wakeLock: PowerManager.WakeLock by lazy {
@@ -81,7 +77,6 @@ class LightBotService : LifecycleService() {
         super.onCreate()
         Config.init(this)
         createNotificationChannel()
-        initCameraProvider()   // Get + cache ProcessCameraProvider once
 
         // Keep camera lifecycle alive for the lifetime of this service
         lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -90,9 +85,13 @@ class LightBotService : LifecycleService() {
                 shutdownCameraNow()
             }
         })
+
+        // Initialize camera once at startup — bound for the service lifetime
+        initCameraProvider()
+        bindImageCapture()
     }
 
-    /** Synchronously get (or wait for) the cached ProcessCameraProvider. */
+    /** Cache ProcessCameraProvider synchronously (safe here since onCreate runs on main thread). */
     private fun initCameraProvider() {
         if (cameraProvider != null) return
         try {
@@ -101,6 +100,31 @@ class LightBotService : LifecycleService() {
             Log.d(TAG, "CameraProvider ready: $cameraProvider")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get CameraProvider in onCreate", e)
+        }
+    }
+
+    /** Create ImageCapture and bind to cameraLifecycleOwner once. Safe to call repeatedly. */
+    private fun bindImageCapture() {
+        val provider = cameraProvider ?: return
+        if (imageCapture != null) {
+            cameraLifecycleOwner.start()
+            return
+        }
+        @Suppress("DEPRECATION")
+        val imgCapture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setTargetResolution(android.util.Size(1280, 720))
+            .setJpegQuality(80)
+            .build()
+        imageCapture = imgCapture
+        try {
+            provider.unbindAll()
+            provider.bindToLifecycle(
+                cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture
+            )
+            Log.d(TAG, "ImageCapture bound to cameraLifecycleOwner")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to bind ImageCapture", e)
         }
     }
 
@@ -123,16 +147,6 @@ class LightBotService : LifecycleService() {
         return START_STICKY
     }
 
-    private fun waitForCameraProvider(timeoutMs: Long): Long {
-        if (cameraProvider != null) return 0
-        var waited = 0L
-        while (cameraProvider == null && waited < timeoutMs) {
-            Thread.sleep(100)
-            waited += 100
-        }
-        return waited
-    }
-
     override fun onDestroy() {
         stopPolling()
         cmdScope.cancel()
@@ -143,11 +157,11 @@ class LightBotService : LifecycleService() {
         super.onDestroy()
     }
 
-    // ── Telegram Polling ─────────────────────────────────────────────
+    // ── Telegram Polling — WakeLock keeps this alive when screen is off ──────
 
     private fun startPolling() {
         pollingJob?.cancel()
-        wakeLock.acquire(10 * 60 * 1000L) // 10 min, renew as needed
+        wakeLock.acquire(10 * 60 * 1000L) // 10 min, renewed by keep-alive
 
         pollingJob = cmdScope.launch {
             while (true) {
@@ -158,7 +172,6 @@ class LightBotService : LifecycleService() {
                         delay(30_000L)
                         continue
                     }
-
                     val result = TelegramBot.fetchUpdates(token, Config.botOffset)
                     result.getOrNull()?.let { updates ->
                         for (update in updates) {
@@ -168,7 +181,6 @@ class LightBotService : LifecycleService() {
                             }
                         }
                     }
-
                     val waitMs = if (result.getOrNull()?.isEmpty() != false) 1_500L else 500L
                     delay(waitMs)
                 } catch (e: Exception) {
@@ -184,6 +196,8 @@ class LightBotService : LifecycleService() {
         pollingJob = null
         if (wakeLock.isHeld) wakeLock.release()
     }
+
+    // ── Telegram Commands ──────────────────────────────────────────────
 
     private fun handleCommand(text: String, chatId: String) {
         val token = Config.botToken
@@ -205,8 +219,7 @@ class LightBotService : LifecycleService() {
                 captureAndSend(source = "command", chatId = chatId)
             }
             text == "/status" -> {
-                val status = buildStatusText()
-                TelegramBot.sendText(token, chatId, status)
+                TelegramBot.sendText(token, chatId, buildStatusText())
             }
             text.startsWith("/interval ") -> {
                 val mins = text.removePrefix("/interval ").trim().toIntOrNull()
@@ -230,7 +243,7 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    // ── CameraX Capture ───────────────────────────────────────────────
+    // ── CameraX Capture — reuses pre-bound ImageCapture ─────────────────
 
     private fun captureAndSend(source: String, chatId: String?) {
         if (capturing) {
@@ -239,83 +252,31 @@ class LightBotService : LifecycleService() {
             }
             return
         }
-        // Always post to main thread — CameraX requires main thread for ProcessCameraProvider.
-        // Matches SentinelService pattern: getInstance() called from main thread.
-        mainHandler.post { captureWithWait(source, chatId) }
-    }
-
-    /**
-     * Initialize cameraProvider on the main thread (CameraX requirement).
-     * Calls back to the main thread, waits for the ListenableFuture to resolve,
-     * then stores the real ProcessCameraProvider in cameraProvider.
-     * Returns true if init succeeded, false otherwise.
-     */
-    private fun syncInitCamera(): Boolean {
-        val latch = CountDownLatch(1)
-        val ok = AtomicBoolean(false)
+        // All CameraX calls on main thread — required by CameraX contract
         mainHandler.post {
-            try {
-                if (cameraProvider != null) {
-                    ok.set(true)
-                    latch.countDown()
-                    return@post
-                }
-                Log.d(TAG, "[main] initializing cameraProvider now")
-                val future = ProcessCameraProvider.getInstance(this@LightBotService)
-                future.addListener({
-                    try {
-                        cameraProvider = future.get()
-                        cameraLifecycleOwner.start()
-                        Log.d(TAG, "[main] cameraProvider ready: $cameraProvider")
-                        ok.set(true)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "[main] future.get() failed", e)
-                        ok.set(false)
-                    } finally {
-                        latch.countDown()
-                    }
-                }, ContextCompat.getMainExecutor(this@LightBotService))
-            } catch (e: Exception) {
-                Log.e(TAG, "[main] syncInitCamera failed", e)
-                ok.set(false)
-                latch.countDown()
-            }
+            if (imageCapture == null) bindImageCapture()
+            captureWithWait(source, chatId)
         }
-        try {
-            if (!latch.await(15, TimeUnit.SECONDS)) {
-                Log.e(TAG, "syncInitCamera timed out")
-                return false
-            }
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return false
-        }
-        return ok.get()
     }
 
+    /** Capture using the pre-bound ImageCapture instance. Runs on main thread. */
     private fun captureWithWait(source: String, chatId: String?) {
-        // Ensure cameraProvider is initialized on the main thread (CameraX requirement)
-        if (cameraProvider == null) {
-            Log.d(TAG, "cameraProvider not ready — syncing to main thread for init")
-            if (!syncInitCamera()) {
-                if (chatId != null) {
-                    TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
-                }
-                return
+        val imgCapture = imageCapture
+        if (cameraProvider == null || imgCapture == null) {
+            Log.e(TAG, "cameraProvider or imageCapture null — cannot capture")
+            if (chatId != null) {
+                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
             }
+            return
         }
-        val provider = cameraProvider!!
 
+        cameraLifecycleOwner.start()
         capturing = true
 
-        // 15-second timeout — if no callback, abort and notify user
+        // 15-second timeout guard
         val timeoutRunnable = Runnable {
             Log.e(TAG, "Capture timeout — no callback in 15s (source=$source)")
-            // Don't call shutdownCamera() here — it would conflict with an in-flight callback
-            // Just set a flag so the callback knows it was a timeout
-            synchronized(this) {
-                captureTimeoutRunnable = null   // signals the callback it was a timeout
-            }
+            synchronized(this) { captureTimeoutRunnable = null }
             capturing = false
             if (chatId != null) {
                 TelegramBot.sendText(Config.botToken, chatId, "❌ 拍照超时（15秒无响应），请检查相机是否被其他应用占用")
@@ -325,24 +286,11 @@ class LightBotService : LifecycleService() {
         mainHandler.postDelayed(timeoutRunnable, 15_000L)
 
         try {
-            provider.unbindAll()
-
-            @Suppress("DEPRECATION")
-            val imgCapture = ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .setTargetResolution(android.util.Size(1280, 720))
-                .setJpegQuality(80)
-                .build()
-            imageCapture = imgCapture
-
-            // Bind to cameraLifecycleOwner — stays STARTED even when app is in background
-            provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture)
-            Log.d(TAG, "CameraX bound, taking picture (source=$source)")
+            Log.d(TAG, "Taking picture with pre-bound ImageCapture (source=$source)")
             imgCapture.takePicture(
                 cameraExecutor,
                 object : ImageCapture.OnImageCapturedCallback() {
                     override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
-                        // Cancel timeout if it hasn't fired yet
                         synchronized(this@LightBotService) {
                             captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
                             captureTimeoutRunnable = null
@@ -361,7 +309,6 @@ class LightBotService : LifecycleService() {
                             captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
                             captureTimeoutRunnable = null
                         }
-                        val isTimeout = (chatId == null)  // timeout path sets chatId=null as signal
                         Log.e(TAG, "CameraX capture error: ${exception.imageCaptureError}", exception)
                         capturing = false
                         if (chatId != null) {
@@ -377,14 +324,11 @@ class LightBotService : LifecycleService() {
                 }
             )
         } catch (e: Exception) {
-            synchronized(this@LightBotService) {
-                captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-                captureTimeoutRunnable = null
-            }
-            Log.e(TAG, "CameraX setup threw: ${e.javaClass.simpleName}", e)
+            synchronized(this) { captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }; captureTimeoutRunnable = null }
+            Log.e(TAG, "takePicture threw: ${e.javaClass.simpleName}", e)
             capturing = false
             if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败：${e.javaClass.simpleName} — ${e.message}")
+                TelegramBot.sendText(Config.botToken, chatId, "❌ 拍照失败：${e.javaClass.simpleName}")
             }
         }
     }
@@ -396,93 +340,49 @@ class LightBotService : LifecycleService() {
         imageCapture = null
     }
 
+    // ── Send Photo to Telegram ─────────────────────────────────────────
+
     private fun processAndSend(jpegData: ByteArray, source: String) {
         cmdScope.launch(Dispatchers.IO) {
             try {
                 val token = Config.botToken
                 val chatId = Config.chatId
+                if (token.isBlank() || chatId.isBlank()) return@launch
+
                 val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val battery = getBatteryLevel()
-
-                if (source == "interval") {
-                    Config.lastIntervalCaptureTime = System.currentTimeMillis()
-                } else {
-                    Config.lastManualCaptureTime = System.currentTimeMillis()
+                val msg = buildString {
+                    append("📸 GuardEye Light\n")
+                    append("⏰ $now\n")
+                    append("🔋 电量：$battery%\n")
+                    append("📍 来源：${if (source == "interval") "定时" else "手动"}")
                 }
 
-                val caption = buildCaption(source, now, battery)
-                Log.d(TAG, "Sending photo: ${jpegData.size} bytes, caption: $caption")
-                val sendResult = TelegramBot.sendPhoto(token, chatId, jpegData, caption)
-                if (sendResult.isFailure) {
-                    Log.e(TAG, "sendPhoto failed: ${sendResult.exceptionOrNull()?.message}")
-                    if (Config.debugMode && chatId.isNotBlank()) {
-                        TelegramBot.sendText(token, chatId,
-                            "🐛 [DEBUG] sendPhoto 失败：${sendResult.exceptionOrNull()?.message}")
-                    }
-                } else {
-                    Log.d(TAG, "Photo sent successfully")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "processAndSend error", e)
                 if (Config.debugMode) {
-                    val token = Config.botToken
-                    val chatId = Config.chatId
-                    if (chatId.isNotBlank()) {
-                        TelegramBot.sendText(token, chatId, "🐛 [DEBUG] processAndSend：${e.message}")
-                    }
+                    Log.d(TAG, "Sending photo to $chatId — ${jpegData.size} bytes")
                 }
+
+                TelegramBot.sendPhoto(token, chatId, jpegData, msg)
+            } catch (e: Exception) {
+                Log.e(TAG, "processAndSend failed", e)
             }
         }
     }
 
-    private fun buildCaption(source: String, time: String, battery: Int): String {
-        val srcLabel = when (source) {
-            "interval" -> "定时拍照"
-            "ui"      -> "APP拍照"
-            else       -> "TEL拍照"
-        }
-        val sb = StringBuilder()
-        sb.append("📸 GuardEye Light\n")
-        sb.append("$time\n")
-        sb.append("来源：$srcLabel\n")
-        sb.append("电量：$battery%")
-
-        if (Config.debugMode) {
-            sb.append("\n─────────────")
-            sb.append("\n🤖 Bot：✅")
-            sb.append("\n🔋 电量：$battery%")
-            sb.append("\n⏱ 拍照间隔：${Config.intervalMinutes}min")
-            sb.append("\n📐 分辨率：CameraX 1280×720")
-            sb.append("\n🐛 调试：✅")
-            sb.append("\n🤖 版本：${BuildConfig.VERSION_NAME}")
-        }
-        return sb.toString()
-    }
-
     private fun buildStatusText(): String {
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        val interval = if (Config.lastIntervalCaptureTime > 0)
-            fmt.format(Date(Config.lastIntervalCaptureTime)) else "无"
-        val manual = if (Config.lastManualCaptureTime > 0)
-            fmt.format(Date(Config.lastManualCaptureTime)) else "无"
-
-        val sb = StringBuilder()
-        sb.append("📊 GuardEye Light 状态\n")
-        sb.append("─────────────────\n")
-        sb.append("🤖 Bot：").append(if (Config.enabled) "✅ 运行中" else "⏸ 已停止").append("\n")
-        sb.append("⏱ 拍照间隔：").append(Config.intervalMinutes).append(" 分钟\n")
-        sb.append("🐛 调试：").append(if (Config.debugMode) "✅ 开启" else "❌ 关闭").append("\n")
-        sb.append("─────────────────\n")
-        sb.append("🕐 最近自动：").append(interval).append("\n")
-        sb.append("📷 最近手动：").append(manual).append("\n")
-        if (Config.debugMode) {
-            sb.append("─────────────────\n")
-            sb.append("🔋 电量：").append(getBatteryLevel()).append("%\n")
-            sb.append("📐 相机：CameraX\n")
-            sb.append("🤖 版本：").append(BuildConfig.VERSION_NAME).append("\n")
-            sb.append("🤖 模型：N/A（Light版）")
+        val battery = getBatteryLevel()
+        val interval = Config.intervalMinutes
+        val enabled = Config.enabled
+        val mode = Config.debugMode
+        return buildString {
+            append("📸 GuardEye Light\n")
+            append("─────────────────\n")
+            append("状态：${if (enabled) "✅ 监控中" else "⏸ 已停止"}\n")
+            append("间隔：$interval 分钟\n")
+            append("电量：$battery%\n")
+            append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
+            append("版本：${BuildConfig.VERSION_NAME}")
         }
-        return sb.toString()
     }
 
     private fun getBatteryLevel(): Int {
@@ -523,9 +423,8 @@ class LightBotService : LifecycleService() {
 
 /**
  * A LifecycleOwner that stays STARTED independently of the app's foreground state.
- * CameraX binds to this so ImageCapture callbacks are never paused when the app
- * goes to background. The owner is started when the service starts and stopped
- * when the service is destroyed.
+ * ImageCapture is bound to this so capture callbacks are never paused when the app
+ * goes to background or the screen is locked.
  */
 private class CameraLifecycleOwner : LifecycleOwner {
     private val lifecycleRegistry = androidx.lifecycle.LifecycleRegistry(this)
@@ -542,6 +441,6 @@ private class CameraLifecycleOwner : LifecycleOwner {
     }
 
     fun stop() {
-        lifecycleRegistry.currentState = androidx.lifecycle.Lifecycle.State.DESTROYED
+        lifecycleRegistry.currentState = androidx.lifecycle.Lifecycle.State.CREATED
     }
 }
