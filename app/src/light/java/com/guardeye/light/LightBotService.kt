@@ -223,13 +223,9 @@ class LightBotService : LifecycleService() {
             }
             return
         }
-        // If already on a background thread (e.g. Telegram coroutine), wait inline.
-        // If on main thread (e.g. onStartCommand), post to Handler to avoid ANR.
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            mainHandler.post { captureWithWait(source, chatId) }
-        } else {
-            captureWithWait(source, chatId)
-        }
+        // Always post to main thread — CameraX requires main thread for ProcessCameraProvider.
+        // Matches SentinelService pattern: getInstance() called from main thread.
+        mainHandler.post { captureWithWait(source, chatId) }
     }
 
     /**
