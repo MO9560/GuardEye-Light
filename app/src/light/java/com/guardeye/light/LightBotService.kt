@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
+import android.os.PowerManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -63,6 +64,13 @@ class LightBotService : LifecycleService() {
     // ── Telegram polling ──────────────────────────────────────────────
     private var pollingJob: Job? = null
     private val cmdScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val wakeLock: PowerManager.WakeLock by lazy {
+        (getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK, "GuardEye:LightPolling"
+        ).apply {
+            setReferenceCounted(false)
+        }
+    }
 
     // ── Foreground notification ─────────────────────────────────────
     private val CHANNEL_ID = "guardeye_light_bot"
@@ -126,7 +134,7 @@ class LightBotService : LifecycleService() {
     }
 
     override fun onDestroy() {
-        pollingJob?.cancel()
+        stopPolling()
         cmdScope.cancel()
         captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         cameraExecutor.shutdown()
@@ -139,6 +147,8 @@ class LightBotService : LifecycleService() {
 
     private fun startPolling() {
         pollingJob?.cancel()
+        wakeLock.acquire(10 * 60 * 1000L) // 10 min, renew as needed
+
         pollingJob = cmdScope.launch {
             while (true) {
                 try {
@@ -167,6 +177,12 @@ class LightBotService : LifecycleService() {
                 }
             }
         }
+    }
+
+    private fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+        if (wakeLock.isHeld) wakeLock.release()
     }
 
     private fun handleCommand(text: String, chatId: String) {
