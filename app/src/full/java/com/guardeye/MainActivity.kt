@@ -63,21 +63,64 @@ class MainActivity : AppCompatActivity() {
     // ── Lifecycle ──────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        android.util.Log.e(TAG, ">>> onCreate START")
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        android.util.Log.e(TAG, ">>> super.onCreate done")
 
-        Config.init(this)
-
-        // Pre-warm model — wrapped in try/catch so load failure doesn't kill the UI
+        // ── Step 1: Config.init ─────────────────────────────────────
         try {
-            CameraService.preloadModel(this)
+            Config.init(this)
+            android.util.Log.e(TAG, ">>> Config.init OK")
         } catch (e: Throwable) {
-            android.util.Log.e(TAG, "Model preload failed: ${e.message}", e)
+            android.util.Log.e(TAG, "!!! Config.init CRASH: ${e.message}", e)
+            throw e
         }
 
-        initViews()
-        loadConfig()
-        setupListeners()
+        // ── Step 2: setContentView — most likely crash point ─────────
+        try {
+            setContentView(R.layout.activity_main)
+            android.util.Log.e(TAG, ">>> setContentView OK")
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "!!! setContentView CRASH: ${e.message}", e)
+            throw e
+        }
+
+        // ── Step 3: preloadModel (full only) ──────────────────────────
+        try {
+            CameraService.preloadModel(this)
+            android.util.Log.e(TAG, ">>> preloadModel OK")
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "!!! preloadModel CRASH: ${e.message}", e)
+            // Don't rethrow — non-fatal for UI
+        }
+
+        // ── Step 4: initViews ────────────────────────────────────────
+        try {
+            initViews()
+            android.util.Log.e(TAG, ">>> initViews OK")
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "!!! initViews CRASH: ${e.message}", e)
+            throw e
+        }
+
+        // ── Step 5: loadConfig + setupListeners ──────────────────────
+        try {
+            loadConfig()
+            android.util.Log.e(TAG, ">>> loadConfig OK")
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "!!! loadConfig CRASH: ${e.message}", e)
+            throw e
+        }
+
+        try {
+            setupListeners()
+            android.util.Log.e(TAG, ">>> setupListeners OK")
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "!!! setupListeners CRASH: ${e.message}", e)
+            throw e
+        }
+
+        android.util.Log.e(TAG, ">>> onCreate ALL DONE")
     }
 
     override fun onResume() {
