@@ -21,6 +21,10 @@ import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val TAG = "GuardEye.Main"
+    }
+
     private lateinit var etBotToken: EditText
     private lateinit var etChatId: EditText
     private lateinit var sliderInterval: SeekBar
@@ -64,8 +68,12 @@ class MainActivity : AppCompatActivity() {
 
         Config.init(this)
 
-        // Pre-warm model early so it's ready before first photo
-        CameraService.preloadModel(this)
+        // Pre-warm model — wrapped in try/catch so load failure doesn't kill the UI
+        try {
+            CameraService.preloadModel(this)
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "Model preload failed: ${e.message}", e)
+        }
 
         initViews()
         loadConfig()

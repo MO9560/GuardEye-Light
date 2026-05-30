@@ -309,7 +309,7 @@
                     android:id="@+id/btnToggleDebug"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:src="@android:drawable/arrow_down_float"
+                    android:src="@drawable/ic_arrow_up"
                     android:contentDescription="Toggle debug"
                     app:tint="@color/text_secondary" />
             </LinearLayout>
