@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etChatId: EditText
     private lateinit var sliderInterval: SeekBar
     private lateinit var tvInterval: TextView
-    private lateinit var switchDetection: com.google.android.material.materialswitch.MaterialSwitch
-    private lateinit var switchDebug: com.google.android.material.materialswitch.MaterialSwitch
+    private lateinit var switchDetection: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchDebug: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var btnSave: Button
     private lateinit var btnStart: Button
     private lateinit var tvBotStatus: TextView
