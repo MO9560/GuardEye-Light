@@ -337,10 +337,10 @@ class MainActivity : AppCompatActivity() {
 
         btnStart.apply {
             text = if (running) "Stop" else "Start"
-            setBackgroundColor(ContextCompat.getColor(this@MainActivity,
+            setBackgroundColor(
                 if (running) ContextCompat.getColor(this@MainActivity, R.color.red)
                 else ContextCompat.getColor(this@MainActivity, R.color.accent)
-            ))
+            )
         }
     }
 
