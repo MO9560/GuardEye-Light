@@ -153,7 +153,12 @@ class LightBotService : LifecycleService() {
         }
         startKeepAlive() // re-acquire before each 10-min window expires
 
-        // ── 2. Start foreground service ──────────────────────────────────
+        // ── 2. Start Telegram polling — ALWAYS running ────────────────────
+        // Unconditional: AlarmReceiver-only restarts still need polling alive.
+        // Safe to call repeatedly (startPolling cancels old job first).
+        startPolling()
+
+        // ── 3. Start foreground service ──────────────────────────────────
         startForeground(NOTIF_ID, buildNotification())
         cameraLifecycleOwner.start()
 
@@ -171,7 +176,7 @@ class LightBotService : LifecycleService() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
-            else -> startPolling()
+            // else: nothing extra needed; polling already started above
         }
         return START_STICKY
     }
