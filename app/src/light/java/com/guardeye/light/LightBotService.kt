@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
-import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.util.Size
@@ -35,8 +34,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -488,9 +485,6 @@ class LightBotService : LifecycleService() {
                 val chatId = Config.chatId
                 if (token.isBlank() || chatId.isBlank()) return@launch
 
-                // ── Save locally ────────────────────────────────────────────
-                saveLocally(jpegData, quality, source)
-
                 val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val battery = getBatteryLevel()
                 val resLabel = PhotoQuality.labelFor(quality)
@@ -499,8 +493,7 @@ class LightBotService : LifecycleService() {
                     append("⏰ $now\n")
                     append("🔋 电量：$battery%\n")
                     append("📐 分辨率：$resLabel\n")
-                    append("📍 来源：${if (source == "interval") "定时" else "手动"}\n")
-                    append("💾 本地：已保存")
+                    append("📍 来源：${if (source == "interval") "定时" else "手动"}")
                 }
 
                 if (Config.debugMode) {
@@ -511,23 +504,6 @@ class LightBotService : LifecycleService() {
             } catch (e: Exception) {
                 Log.e(TAG, "processAndSend failed", e)
             }
-        }
-    }
-
-    private fun saveLocally(jpegData: ByteArray, quality: String, source: String) {
-        try {
-            val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "GuardEye")
-            if (!dir.exists() && !dir.mkdirs()) {
-                Log.e(TAG, "Failed to create GuardEye directory: $dir")
-                return
-            }
-            val prefix = if (source == "interval") "auto" else "manual"
-            val timeStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val file = File(dir, "GuardEye_${prefix}_${timeStr}_$quality.jpg")
-            FileOutputStream(file).use { it.write(jpegData) }
-            Log.d(TAG, "Local save OK: ${file.absolutePath} (${jpegData.size} bytes)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Local save failed", e)
         }
     }
 
