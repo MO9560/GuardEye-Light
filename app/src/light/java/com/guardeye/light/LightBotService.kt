@@ -11,8 +11,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
+import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -33,11 +35,38 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
+// ── Photo resolution tiers ───────────────────────────────────────────────────
+object PhotoQuality {
+    const val HIGH   = "high"
+    const val MEDIUM = "medium"
+    const val LOW    = "low"
+
+    val HIGH_SIZE   = Size(1920, 1080)
+    val MEDIUM_SIZE = Size(1280, 720)
+    val LOW_SIZE    = Size(854, 480)
+
+    fun sizeFor(quality: String): Size = when (quality.lowercase()) {
+        HIGH   -> HIGH_SIZE
+        MEDIUM -> MEDIUM_SIZE
+        LOW    -> LOW_SIZE
+        else   -> MEDIUM_SIZE
+    }
+
+    fun labelFor(quality: String): String = when (quality.lowercase()) {
+        HIGH   -> "1920×1080"
+        MEDIUM -> "1280×720"
+        LOW    -> "854×480"
+        else   -> "1280×720"
+    }
+}
 
 /**
  * LightBotService — GuardEye Light (CameraX)
@@ -117,26 +146,30 @@ class LightBotService : LifecycleService() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    // Default resolution for interval captures (1280×720)
     private fun bindImageCapture() {
+        bindImageCapture(PhotoQuality.MEDIUM_SIZE)
+    }
+
+    private fun bindImageCapture(targetSize: Size) {
         val provider = cameraProvider ?: return
-        if (cameraReady) return
 
         @Suppress("DEPRECATION")
         val imgCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setTargetResolution(android.util.Size(1280, 720))
-            .setJpegQuality(80)
+            .setTargetResolution(targetSize)
+            .setJpegQuality(85)
             .build()
-        imageCapture = imgCapture
 
         try {
             provider.unbindAll()
             provider.bindToLifecycle(
                 cameraLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, imgCapture
             )
+            imageCapture = imgCapture
             cameraReady = true
             cameraLifecycleOwner.start()
-            Log.d(TAG, "[main] ImageCapture bound to cameraLifecycleOwner — camera ready")
+            Log.d(TAG, "[main] ImageCapture bound — ${targetSize.width}x${targetSize.height}")
         } catch (e: Exception) {
             Log.e(TAG, "[main] Failed to bind ImageCapture", e)
         }
@@ -300,9 +333,11 @@ class LightBotService : LifecycleService() {
                 LightAlarmReceiver.cancelAlarm(this)
                 TelegramBot.sendText(token, chatId, "⏸ 已停止")
             }
-            text == "/photo" -> {
-                TelegramBot.sendText(token, chatId, "📸 正在拍照...")
-                captureAndSend(source = "command", chatId = chatId)
+            text.startsWith("/photo") -> {
+                val quality = text.removePrefix("/photo").trim().ifEmpty { PhotoQuality.MEDIUM }
+                val label = PhotoQuality.labelFor(quality)
+                TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
+                captureAndSend(source = "command", chatId = chatId, quality = quality)
             }
             text == "/status" -> {
                 TelegramBot.sendText(token, chatId, buildStatusText())
@@ -339,7 +374,7 @@ class LightBotService : LifecycleService() {
 
     // ── CameraX Capture ────────────────────────────────────────────────────────
 
-    private fun captureAndSend(source: String, chatId: String?) {
+    private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.MEDIUM) {
         if (capturing) {
             if (source == "command" && chatId != null) {
                 TelegramBot.sendText(Config.botToken, chatId, "⚠️ 相机正忙，请稍后重试")
@@ -351,11 +386,19 @@ class LightBotService : LifecycleService() {
                 Log.d(TAG, "Camera not ready — forcing init from capture path")
                 initCameraProvider()
             }
-            captureWithWait(source, chatId)
+            captureWithWait(source, chatId, quality)
         }
     }
 
-    private fun captureWithWait(source: String, chatId: String?) {
+    private fun captureWithWait(source: String, chatId: String?, quality: String) {
+        // For command captures with non-default quality, rebind with target resolution
+        if (source != "interval") {
+            val targetSize = PhotoQuality.sizeFor(quality)
+            if (targetSize != PhotoQuality.MEDIUM_SIZE) {
+                bindImageCapture(targetSize)
+            }
+        }
+
         val imgCapture = imageCapture
         if (cameraProvider == null || imgCapture == null) {
             Log.e(TAG, "cameraProvider or imageCapture null — cannot capture")
@@ -395,8 +438,8 @@ class LightBotService : LifecycleService() {
                         buf.get(data)
                         image.close()
                         capturing = false
-                        Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source")
-                        processAndSend(data, source)
+                        Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source, quality=$quality")
+                        processAndSend(data, source, quality)
                     }
 
                     override fun onError(exception: ImageCaptureException) {
@@ -438,30 +481,53 @@ class LightBotService : LifecycleService() {
 
     // ── Send Photo ──────────────────────────────────────────────────────────────
 
-    private fun processAndSend(jpegData: ByteArray, source: String) {
+    private fun processAndSend(jpegData: ByteArray, source: String, quality: String) {
         cmdScope.launch(Dispatchers.IO) {
             try {
                 val token = Config.botToken
                 val chatId = Config.chatId
                 if (token.isBlank() || chatId.isBlank()) return@launch
 
+                // ── Save locally ────────────────────────────────────────────
+                saveLocally(jpegData, quality, source)
+
                 val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val battery = getBatteryLevel()
+                val resLabel = PhotoQuality.labelFor(quality)
                 val msg = buildString {
                     append("📸 GuardEye Light\n")
                     append("⏰ $now\n")
                     append("🔋 电量：$battery%\n")
-                    append("📍 来源：${if (source == "interval") "定时" else "手动"}")
+                    append("📐 分辨率：$resLabel\n")
+                    append("📍 来源：${if (source == "interval") "定时" else "手动"}\n")
+                    append("💾 本地：已保存")
                 }
 
                 if (Config.debugMode) {
-                    Log.d(TAG, "Sending photo to $chatId — ${jpegData.size} bytes")
+                    Log.d(TAG, "Sending photo to $chatId — ${jpegData.size} bytes, quality=$quality")
                 }
 
                 TelegramBot.sendPhoto(token, chatId, jpegData, msg)
             } catch (e: Exception) {
                 Log.e(TAG, "processAndSend failed", e)
             }
+        }
+    }
+
+    private fun saveLocally(jpegData: ByteArray, quality: String, source: String) {
+        try {
+            val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "GuardEye")
+            if (!dir.exists() && !dir.mkdirs()) {
+                Log.e(TAG, "Failed to create GuardEye directory: $dir")
+                return
+            }
+            val prefix = if (source == "interval") "auto" else "manual"
+            val timeStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val file = File(dir, "GuardEye_${prefix}_${timeStr}_$quality.jpg")
+            FileOutputStream(file).use { it.write(jpegData) }
+            Log.d(TAG, "Local save OK: ${file.absolutePath} (${jpegData.size} bytes)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Local save failed", e)
         }
     }
 
@@ -479,7 +545,16 @@ class LightBotService : LifecycleService() {
             append("电量：$battery%\n")
             append("WakeLock：$wlStatus\n")
             append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
-            append("版本：${BuildConfig.VERSION_NAME}")
+            append("版本：${BuildConfig.VERSION_NAME}\n")
+            append("─────────────────\n")
+            append("📋 指令列表：\n")
+            append("/start — 启动监控\n")
+            append("/stop  — 停止监控\n")
+            append("/photo [high|medium|low] — 拍照\n")
+            append("/status — 状态\n")
+            append("/interval N — 间隔(分钟)\n")
+            append("/battery — 电池优化设置\n")
+            append("/debug [on|off] — 调试模式")
         }
     }
 
