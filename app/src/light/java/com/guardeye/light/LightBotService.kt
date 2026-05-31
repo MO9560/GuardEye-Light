@@ -490,24 +490,30 @@ class LightBotService : LifecycleService() {
 
     // ── Post-processing: resize JPEG to target resolution ──────────────────────────
 
+    // CameraX setTargetResolution is only a hint — the camera may output a larger native
+    // resolution. Always resize to the exact target dimensions; only skip if already exact.
     private fun resizeJpeg(jpegData: ByteArray, quality: String): ByteArray {
-        if (quality == PhotoQuality.HIGH) return jpegData
-
         val targetW: Int
         val targetH: Int
-        val targetJpegQ: Int
+        val targetJpegQ = PhotoQuality.jpegQualityFor(quality)
 
         when (quality) {
-            PhotoQuality.MEDIUM -> { targetW = PhotoQuality.MEDIUM_W; targetH = PhotoQuality.MEDIUM_H; targetJpegQ = PhotoQuality.jpegQualityFor(quality) }
-            PhotoQuality.LOW    -> { targetW = PhotoQuality.LOW_W;    targetH = PhotoQuality.LOW_H;    targetJpegQ = PhotoQuality.jpegQualityFor(quality) }
+            PhotoQuality.HIGH   -> { targetW = PhotoQuality.HIGH_W;   targetH = PhotoQuality.HIGH_H }
+            PhotoQuality.MEDIUM -> { targetW = PhotoQuality.MEDIUM_W; targetH = PhotoQuality.MEDIUM_H }
+            PhotoQuality.LOW    -> { targetW = PhotoQuality.LOW_W;    targetH = PhotoQuality.LOW_H }
             else               -> return jpegData
         }
 
-        // Decode bounds only to calculate inSampleSize (memory-efficient downscaling)
+        // Decode bounds only to check if resize is needed
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
 
-        // Calculate inSampleSize for 2-pass downscaling
+        // Skip if already at exact target (avoids unnecessary Bitmap decode/encode)
+        if (opts.outWidth == targetW && opts.outHeight == targetH && targetJpegQ >= 95) {
+            return jpegData
+        }
+
+        // Calculate inSampleSize for memory-efficient downscaling
         opts.inSampleSize = calculateInSampleSize(opts, targetW, targetH)
         opts.inJustDecodeBounds = false
 
@@ -525,7 +531,7 @@ class LightBotService : LifecycleService() {
         bitmap.recycle()
 
         val result = out.toByteArray()
-        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes ($targetW×$targetH, q=$targetJpegQ)")
+        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes (${opts.outWidth}×${opts.outHeight} → $targetW×$targetH, q=$targetJpegQ)")
         return result
     }
 
@@ -565,11 +571,10 @@ class LightBotService : LifecycleService() {
                     append("📸 GuardEye Light\n")
                     append("⏰ $now\n")
                     append("🔋 电量：$battery%\n")
-                    append("📐 分辨率：$resLabel\n")
                     append("📍 来源：$sourceLabel\n")
                     append("─────────────────\n")
-                    append("📋 /photo — 拍照（默认高分辨率）\n")
-                    append("📋 /status — 状态")
+                    append("📋 /photo （$resLabel）\n")
+                    append("📋 /status")
                 }
 
                 if (Config.debugMode) {
