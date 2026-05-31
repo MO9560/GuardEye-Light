@@ -37,31 +37,37 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-// ── Photo resolution tiers ───────────────────────────────────────────────────
+// ── Photo quality tiers ─────────────────────────────────────────────────────
+// CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
 object PhotoQuality {
     const val HIGH   = "high"
     const val MEDIUM = "medium"
     const val LOW    = "low"
 
-    val HIGH_SIZE   = Size(1920, 1080)
-    val MEDIUM_SIZE = Size(1280, 720)
-    val LOW_SIZE    = Size(854, 480)
+    // Target display sizes (used for post-processing resize)
+    const val HIGH_W   = 1920; const val HIGH_H   = 1080
+    const val MEDIUM_W = 1280; const val MEDIUM_H = 720
+    const val LOW_W    = 854;  const val LOW_H    = 480
 
-    fun sizeFor(quality: String): Size = when (quality.lowercase()) {
-        HIGH   -> HIGH_SIZE
-        MEDIUM -> MEDIUM_SIZE
-        LOW    -> LOW_SIZE
-        else   -> MEDIUM_SIZE
+    // JPEG quality passed to compressor
+    fun jpegQualityFor(quality: String): Int = when (quality.lowercase()) {
+        HIGH   -> 95
+        MEDIUM -> 70
+        LOW    -> 50
+        else   -> 95
     }
 
     fun labelFor(quality: String): String = when (quality.lowercase()) {
         HIGH   -> "1920×1080"
         MEDIUM -> "1280×720"
         LOW    -> "854×480"
-        else   -> "1280×720"
+        else   -> "1920×1080"
     }
 }
 
@@ -143,19 +149,15 @@ class LightBotService : LifecycleService() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    // Default resolution for interval captures (1280×720)
+    // CameraX always binds at HIGH (1920×1080); post-processing handles resize/compress.
     private fun bindImageCapture() {
-        bindImageCapture(PhotoQuality.MEDIUM_SIZE)
-    }
-
-    private fun bindImageCapture(targetSize: Size) {
         val provider = cameraProvider ?: return
 
         @Suppress("DEPRECATION")
         val imgCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setTargetResolution(targetSize)
-            .setJpegQuality(85)
+            .setTargetResolution(Size(PhotoQuality.HIGH_W, PhotoQuality.HIGH_H))
+            .setJpegQuality(95)
             .build()
 
         try {
@@ -166,7 +168,7 @@ class LightBotService : LifecycleService() {
             imageCapture = imgCapture
             cameraReady = true
             cameraLifecycleOwner.start()
-            Log.d(TAG, "[main] ImageCapture bound — ${targetSize.width}x${targetSize.height}")
+            Log.d(TAG, "[main] ImageCapture bound — HIGH (1920×1080)")
         } catch (e: Exception) {
             Log.e(TAG, "[main] Failed to bind ImageCapture", e)
         }
@@ -331,7 +333,13 @@ class LightBotService : LifecycleService() {
                 TelegramBot.sendText(token, chatId, "⏸ 已停止")
             }
             text.startsWith("/photo") -> {
-                val quality = text.removePrefix("/photo").trim().ifEmpty { PhotoQuality.MEDIUM }
+                val raw = text.removePrefix("/photo").trim().lowercase()
+                val quality = when (raw) {
+                    "h", "high"   -> PhotoQuality.HIGH
+                    "m", "medium" -> PhotoQuality.MEDIUM
+                    "l", "low"    -> PhotoQuality.LOW
+                    else           -> PhotoQuality.HIGH
+                }
                 val label = PhotoQuality.labelFor(quality)
                 TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
                 captureAndSend(source = "command", chatId = chatId, quality = quality)
@@ -371,7 +379,16 @@ class LightBotService : LifecycleService() {
 
     // ── CameraX Capture ────────────────────────────────────────────────────────
 
-    private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.MEDIUM) {
+    private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.HIGH) {
+        // Map capture source to output quality:
+        //   interval → MEDIUM (定时拍照，节省流量)
+        //   ui       → LOW    (App内拍照，低分辨率)
+        //   command  → uses the quality arg passed in (h/m/l, default HIGH)
+        val outputQuality = when (source) {
+            "interval" -> PhotoQuality.MEDIUM
+            "ui"      -> PhotoQuality.LOW
+            else       -> quality
+        }
         if (capturing) {
             if (source == "command" && chatId != null) {
                 TelegramBot.sendText(Config.botToken, chatId, "⚠️ 相机正忙，请稍后重试")
@@ -383,18 +400,13 @@ class LightBotService : LifecycleService() {
                 Log.d(TAG, "Camera not ready — forcing init from capture path")
                 initCameraProvider()
             }
-            captureWithWait(source, chatId, quality)
+            captureWithWait(source, chatId, outputQuality)
         }
     }
 
     private fun captureWithWait(source: String, chatId: String?, quality: String) {
-        // For command captures with non-default quality, rebind with target resolution
-        if (source != "interval") {
-            val targetSize = PhotoQuality.sizeFor(quality)
-            if (targetSize != PhotoQuality.MEDIUM_SIZE) {
-                bindImageCapture(targetSize)
-            }
-        }
+        // CameraX always shoots at HIGH; post-processing handles resize/compress.
+        // No rebind needed — stable single-session capture.
 
         val imgCapture = imageCapture
         if (cameraProvider == null || imgCapture == null) {
@@ -476,6 +488,59 @@ class LightBotService : LifecycleService() {
         cameraReady = false
     }
 
+    // ── Post-processing: resize JPEG to target resolution ──────────────────────────
+
+    private fun resizeJpeg(jpegData: ByteArray, quality: String): ByteArray {
+        if (quality == PhotoQuality.HIGH) return jpegData
+
+        val targetW: Int
+        val targetH: Int
+        val targetJpegQ: Int
+
+        when (quality) {
+            PhotoQuality.MEDIUM -> { targetW = PhotoQuality.MEDIUM_W; targetH = PhotoQuality.MEDIUM_H; targetJpegQ = PhotoQuality.jpegQualityFor(quality) }
+            PhotoQuality.LOW    -> { targetW = PhotoQuality.LOW_W;    targetH = PhotoQuality.LOW_H;    targetJpegQ = PhotoQuality.jpegQualityFor(quality) }
+            else               -> return jpegData
+        }
+
+        // Decode bounds only to calculate inSampleSize (memory-efficient downscaling)
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
+
+        // Calculate inSampleSize for 2-pass downscaling
+        opts.inSampleSize = calculateInSampleSize(opts, targetW, targetH)
+        opts.inJustDecodeBounds = false
+
+        var bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
+            ?: return jpegData
+
+        // Scale to exact target size
+        val scaled = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
+        if (scaled != bitmap) bitmap.recycle()
+        bitmap = scaled
+
+        // Re-encode as JPEG
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, targetJpegQ, out)
+        bitmap.recycle()
+
+        val result = out.toByteArray()
+        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes ($targetW×$targetH, q=$targetJpegQ)")
+        return result
+    }
+
+    private fun calculateInSampleSize(opts: BitmapFactory.Options, reqW: Int, reqH: Int): Int {
+        val (h: Int, w: Int) = opts.outHeight to opts.outWidth
+        var inSampleSize = 1
+        if (h > reqH || w > reqW) {
+            val halfH = h / 2; val halfW = w / 2
+            while (halfH / inSampleSize >= reqH && halfW / inSampleSize >= reqW) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
     // ── Send Photo ──────────────────────────────────────────────────────────────
 
     private fun processAndSend(jpegData: ByteArray, source: String, quality: String) {
@@ -485,22 +550,33 @@ class LightBotService : LifecycleService() {
                 val chatId = Config.chatId
                 if (token.isBlank() || chatId.isBlank()) return@launch
 
+                // Post-process: resize JPEG to target quality
+                val finalData = resizeJpeg(jpegData, quality)
+
                 val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val battery = getBatteryLevel()
                 val resLabel = PhotoQuality.labelFor(quality)
+                val sourceLabel = when (source) {
+                    "interval" -> "定时"
+                    "ui"      -> "App"
+                    else       -> "手动"
+                }
                 val msg = buildString {
                     append("📸 GuardEye Light\n")
                     append("⏰ $now\n")
                     append("🔋 电量：$battery%\n")
                     append("📐 分辨率：$resLabel\n")
-                    append("📍 来源：${if (source == "interval") "定时" else "手动"}")
+                    append("📍 来源：$sourceLabel\n")
+                    append("─────────────────\n")
+                    append("📋 /photo — 拍照（默认高分辨率）\n")
+                    append("📋 /status — 状态")
                 }
 
                 if (Config.debugMode) {
-                    Log.d(TAG, "Sending photo to $chatId — ${jpegData.size} bytes, quality=$quality")
+                    Log.d(TAG, "Sending photo to $chatId — ${finalData.size} bytes, quality=$quality")
                 }
 
-                TelegramBot.sendPhoto(token, chatId, jpegData, msg)
+                TelegramBot.sendPhoto(token, chatId, finalData, msg)
             } catch (e: Exception) {
                 Log.e(TAG, "processAndSend failed", e)
             }
