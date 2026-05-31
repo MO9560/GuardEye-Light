@@ -109,6 +109,15 @@ class LightMainActivity : AppCompatActivity() {
             startForegroundService(svc)
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
         }
+
+        ui.btnBattery.setOnClickListener {
+            // Open battery optimization settings — user taps this once
+            val intent = Intent(this, LightBotService::class.java).apply {
+                action = LightBotService.ACTION_REQUEST_BATTERY
+            }
+            startForegroundService(intent)
+            Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun refreshStatus() {

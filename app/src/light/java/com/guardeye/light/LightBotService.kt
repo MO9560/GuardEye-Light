@@ -5,11 +5,13 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -36,13 +38,19 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 /**
  * LightBotService — GuardEye Light (CameraX)
  * Telegram polling + CameraX capture in one foreground service.
  * ImageCapture is bound once at startup and reused for all captures.
  * CameraLifecycleOwner stays STARTED independent of app foreground state.
+ *
+ * Background keep-alive strategy:
+ *  1. ForegroundService — tells system this is a long-running service
+ *  2. PARTIAL_WAKE_LOCK — prevents CPU from sleeping (camera capture still works with screen off)
+ *  3. WakeLock keep-alive — re-acquires every 8 min before the 10-min lease expires
+ *  4. setAlarmClock (in LightAlarmReceiver) — highest-priority alarm, always fires in Doze
+ *  5. Notification IMPORTANCE_HIGH — less likely to be killed by system
  */
 class LightBotService : LifecycleService() {
 
@@ -53,7 +61,7 @@ class LightBotService : LifecycleService() {
     private var capturing = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
-    private var cameraReady = false  // true when ImageCapture is bound and ready
+    private var cameraReady = false
 
     // ── Lifecycle — stays STARTED even when app is in background ──────
     private val cameraLifecycleOwner = CameraLifecycleOwner()
@@ -68,6 +76,8 @@ class LightBotService : LifecycleService() {
             setReferenceCounted(false)
         }
     }
+    // Keep-alive: re-acquire WakeLock every 8 min to prevent kernel from timing it out
+    private var keepAliveRunnable: Runnable? = null
 
     // ── Foreground notification ─────────────────────────────────────
     private val CHANNEL_ID = "guardeye_light_bot"
@@ -79,7 +89,6 @@ class LightBotService : LifecycleService() {
         Config.init(this)
         createNotificationChannel()
 
-        // Keep camera lifecycle alive for the lifetime of this service
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
                 cameraLifecycleOwner.stop()
@@ -87,15 +96,9 @@ class LightBotService : LifecycleService() {
             }
         })
 
-        // Initialize camera once at startup — matches SentinelService pattern:
-        // all CameraX calls run on main thread via addListener callback
         initCameraProvider()
     }
 
-    /**
-     * Initialize ProcessCameraProvider using addListener (SentinelService pattern).
-     * All CameraX operations happen inside the callback on the main thread.
-     */
     private fun initCameraProvider() {
         if (cameraProvider != null) {
             bindImageCapture()
@@ -103,7 +106,6 @@ class LightBotService : LifecycleService() {
         }
         Log.d(TAG, "[main] initCameraProvider — requesting ProcessCameraProvider")
         val future = ProcessCameraProvider.getInstance(this)
-        // Callback runs on main thread (ContextCompat.getMainExecutor) — matches SentinelService
         future.addListener({
             try {
                 cameraProvider = future.get()
@@ -115,13 +117,9 @@ class LightBotService : LifecycleService() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /**
-     * Build ImageCapture and bind to cameraLifecycleOwner.
-     * Called from initCameraProvider's callback — runs on main thread.
-     */
     private fun bindImageCapture() {
         val provider = cameraProvider ?: return
-        if (cameraReady) return  // already bound
+        if (cameraReady) return
 
         @Suppress("DEPRECATION")
         val imgCapture = ImageCapture.Builder()
@@ -146,6 +144,16 @@ class LightBotService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+
+        // ── 1. Acquire WakeLock immediately ──────────────────────────────
+        // PARTIAL_WAKE_LOCK: CPU stays awake, screen can still turn off
+        if (!wakeLock.isHeld) {
+            wakeLock.acquire(10 * 60 * 1000L) // 10 min; renewed by keep-alive below
+            Log.d(TAG, "WakeLock acquired on service start")
+        }
+        startKeepAlive() // re-acquire before each 10-min window expires
+
+        // ── 2. Start foreground service ──────────────────────────────────
         startForeground(NOTIF_ID, buildNotification())
         cameraLifecycleOwner.start()
 
@@ -158,6 +166,11 @@ class LightBotService : LifecycleService() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
+            ACTION_REQUEST_BATTERY -> {
+                requestIgnoreBatteryOptimizations()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
             else -> startPolling()
         }
         return START_STICKY
@@ -165,20 +178,22 @@ class LightBotService : LifecycleService() {
 
     override fun onDestroy() {
         stopPolling()
+        stopKeepAlive()
         cmdScope.cancel()
         captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         cameraExecutor.shutdown()
         cameraProvider?.shutdown()
         cameraLifecycleOwner.stop()
+        if (wakeLock.isHeld) {
+            try { wakeLock.release() } catch (_: Exception) {}
+        }
         super.onDestroy()
     }
 
-    // ── Telegram Polling — WakeLock keeps this alive when screen is off ──────
+    // ── Telegram Polling ────────────────────────────────────────────────────────
 
     private fun startPolling() {
         pollingJob?.cancel()
-        wakeLock.acquire(10 * 60 * 1000L) // 10 min, renewed by keep-alive
-
         pollingJob = cmdScope.launch {
             while (true) {
                 try {
@@ -210,10 +225,56 @@ class LightBotService : LifecycleService() {
     private fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
-        if (wakeLock.isHeld) wakeLock.release()
+        // WakeLock released by stopKeepAlive(); don't release here (camera capture needs it)
     }
 
-    // ── Telegram Commands ──────────────────────────────────────────────
+    // ── WakeLock keep-alive: re-acquire before each 10-min window expires ──────
+
+    private fun startKeepAlive() {
+        stopKeepAlive()
+        keepAliveRunnable = object : Runnable {
+            override fun run() {
+                if (!wakeLock.isHeld) {
+                    wakeLock.acquire(10 * 60 * 1000L)
+                    Log.d(TAG, "WakeLock renewed via keep-alive")
+                }
+                mainHandler.postDelayed(this, 8 * 60 * 1000L) // every 8 min
+            }
+        }
+        keepAliveRunnable?.let { mainHandler.postDelayed(it, 8 * 60 * 1000L) }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveRunnable?.let { mainHandler.removeCallbacks(it) }
+        keepAliveRunnable = null
+        // Release WakeLock only when service is truly shutting down
+        if (wakeLock.isHeld) {
+            try { wakeLock.release() } catch (_: Exception) {}
+        }
+    }
+
+    // ── Battery Optimization whitelist ─────────────────────────────────────────
+
+    /**
+     * Opens system dialog to request adding this app to battery whitelist (Doze exempt).
+     * This is the single most effective thing users can do to prevent kill-by-battery.
+     * Call via ACTION_REQUEST_BATTERY intent from MainActivity.
+     */
+    private fun requestIgnoreBatteryOptimizations() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Cannot open battery optimization settings", e)
+        }
+    }
+
+    // ── Telegram Commands ───────────────────────────────────────────────────────
 
     private fun handleCommand(text: String, chatId: String) {
         val token = Config.botToken
@@ -223,7 +284,11 @@ class LightBotService : LifecycleService() {
             text == "/start" -> {
                 Config.enabled = true
                 LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
-                TelegramBot.sendText(token, chatId, "✅ GuardEye Light 已启动\n间隔：${Config.intervalMinutes}分钟")
+                TelegramBot.sendText(token, chatId,
+                    "✅ GuardEye Light 已启动\n" +
+                    "⏱ 间隔：${Config.intervalMinutes}分钟\n" +
+                    "🔋 提示：建议关闭电池优化以提高稳定性\n" +
+                    "   App内发送 /battery 可一键设置")
             }
             text == "/stop" -> {
                 Config.enabled = false
@@ -236,6 +301,14 @@ class LightBotService : LifecycleService() {
             }
             text == "/status" -> {
                 TelegramBot.sendText(token, chatId, buildStatusText())
+            }
+            text == "/battery" -> {
+                TelegramBot.sendText(token, chatId,
+                    "🔋 正在打开电池优化设置...\n请选择「不限」或「不优化」以确保后台稳定运行")
+                val i = Intent(this, LightBotService::class.java).apply {
+                    action = ACTION_REQUEST_BATTERY
+                }
+                startForegroundService(i)
             }
             text.startsWith("/interval ") -> {
                 val mins = text.removePrefix("/interval ").trim().toIntOrNull()
@@ -259,7 +332,7 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    // ── CameraX Capture — reuses pre-bound ImageCapture ─────────────────
+    // ── CameraX Capture ────────────────────────────────────────────────────────
 
     private fun captureAndSend(source: String, chatId: String?) {
         if (capturing) {
@@ -268,9 +341,7 @@ class LightBotService : LifecycleService() {
             }
             return
         }
-        // All CameraX calls on main thread — required by CameraX contract
         mainHandler.post {
-            // If camera not ready yet, trigger init; capture will succeed once bound
             if (!cameraReady) {
                 Log.d(TAG, "Camera not ready — forcing init from capture path")
                 initCameraProvider()
@@ -279,7 +350,6 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    /** Capture using the pre-bound ImageCapture instance. Runs on main thread. */
     private fun captureWithWait(source: String, chatId: String?) {
         val imgCapture = imageCapture
         if (cameraProvider == null || imgCapture == null) {
@@ -361,7 +431,7 @@ class LightBotService : LifecycleService() {
         cameraReady = false
     }
 
-    // ── Send Photo to Telegram ─────────────────────────────────────────
+    // ── Send Photo ──────────────────────────────────────────────────────────────
 
     private fun processAndSend(jpegData: ByteArray, source: String) {
         cmdScope.launch(Dispatchers.IO) {
@@ -395,12 +465,14 @@ class LightBotService : LifecycleService() {
         val interval = Config.intervalMinutes
         val enabled = Config.enabled
         val mode = Config.debugMode
+        val wlStatus = if (wakeLock.isHeld) "✅ 已持有" else "⚠️ 未持有"
         return buildString {
             append("📸 GuardEye Light\n")
             append("─────────────────\n")
             append("状态：${if (enabled) "✅ 监控中" else "⏸ 已停止"}\n")
             append("间隔：$interval 分钟\n")
             append("电量：$battery%\n")
+            append("WakeLock：$wlStatus\n")
             append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
             append("版本：${BuildConfig.VERSION_NAME}")
         }
@@ -415,12 +487,15 @@ class LightBotService : LifecycleService() {
         } catch (e: Exception) { -1 }
     }
 
-    // ── Notification ──────────────────────────────────────────────────
+    // ── Notification ──────────────────────────────────────────────────────────
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(CHANNEL_ID, "GuardEye Light", NotificationManager.IMPORTANCE_LOW)
+            // IMPORTANCE_HIGH → heads-up notification on Android 7+
+            // System is less aggressive about killing high-priority foreground services
+            val ch = NotificationChannel(CHANNEL_ID, "GuardEye Light", NotificationManager.IMPORTANCE_HIGH)
             ch.setShowBadge(false)
+            ch.setDescription("保持 GuardEye Light 在后台运行")
             val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(ch)
         }
@@ -428,10 +503,11 @@ class LightBotService : LifecycleService() {
 
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setContentTitle("📸 GuardEye Light")
-        .setContentText(if (Config.enabled) "监控中" else "已停止")
+        .setContentTitle("📸 GuardEye Light — 监控中")
+        .setContentText(if (Config.enabled) "定时拍照 · ${Config.intervalMinutes}分钟/次" else "已停止")
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
         .setOngoing(true)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .build()
 
     companion object {
@@ -439,6 +515,7 @@ class LightBotService : LifecycleService() {
         const val ACTION_CAPTURE        = "com.guardeye.light.ACTION_CAPTURE"
         const val ACTION_MANUAL_CAPTURE = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
         const val ACTION_STOP           = "com.guardeye.light.ACTION_STOP"
+        const val ACTION_REQUEST_BATTERY = "com.guardeye.light.ACTION_REQUEST_BATTERY"
     }
 }
 
