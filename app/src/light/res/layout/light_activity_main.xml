@@ -188,11 +188,13 @@
 
             <!-- Photo column -->
             <LinearLayout
+                android:id="@+id/btnPhoto"
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center_horizontal"
-                android:paddingStart="8dp">
+                android:paddingStart="8dp"
+                android:background="?attr/selectableItemBackground">
                 <TextView
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="拍照"

@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.text.method.PasswordTransformationMethod
-import android.view.View
+
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -113,7 +113,7 @@ class LightMainActivity : AppCompatActivity() {
         }
 
         // Photo capture (tap the photo icon column)
-        ui.root.findViewById<View>(R.id.btnPhoto)?.setOnClickListener {
+        ui.btnPhoto.setOnClickListener {
             if (!validateConfig()) return@setOnClickListener
             saveConfig()
             val svc = Intent(this, LightBotService::class.java).apply {
