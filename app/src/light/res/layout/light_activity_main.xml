@@ -221,8 +221,7 @@
                 android:valueFrom="1" android:valueTo="60" android:stepSize="1"
                 android:value="5"
                 app:trackColorActive="@color/primary"
-                app:thumbTint="@color/primary"
-                app:hintColor="@color/card_stroke"/>
+                app:thumbTint="@color/primary"/>
         </LinearLayout>
 
         <!-- ═══ Start Button ═══ -->
