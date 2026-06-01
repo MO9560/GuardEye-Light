@@ -39,6 +39,8 @@ import java.util.Date
 import java.util.Locale
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -488,58 +490,90 @@ class LightBotService : LifecycleService() {
         cameraReady = false
     }
 
-    // ── Post-processing: resize JPEG to target resolution ──────────────────────────
+    // ── Post-processing: resize + rotate JPEG ───────────────────────────────
 
     // CameraX setTargetResolution is only a hint — the camera may output a larger native
-    // resolution. Always resize to the exact target dimensions; only skip if already exact.
+    // resolution. Always resize to fit within target dimensions.
     private fun resizeJpeg(jpegData: ByteArray, quality: String): ByteArray {
-        val targetW: Int
-        val targetH: Int
+        val maxW: Int
+        val maxH: Int
         val targetJpegQ = PhotoQuality.jpegQualityFor(quality)
 
         when (quality) {
-            PhotoQuality.HIGH   -> { targetW = PhotoQuality.HIGH_W;   targetH = PhotoQuality.HIGH_H }
-            PhotoQuality.MEDIUM -> { targetW = PhotoQuality.MEDIUM_W; targetH = PhotoQuality.MEDIUM_H }
-            PhotoQuality.LOW    -> { targetW = PhotoQuality.LOW_W;    targetH = PhotoQuality.LOW_H }
+            PhotoQuality.HIGH   -> { maxW = PhotoQuality.HIGH_W;   maxH = PhotoQuality.HIGH_H }
+            PhotoQuality.MEDIUM -> { maxW = PhotoQuality.MEDIUM_W; maxH = PhotoQuality.MEDIUM_H }
+            PhotoQuality.LOW    -> { maxW = PhotoQuality.LOW_W;    maxH = PhotoQuality.LOW_H }
             else               -> return jpegData
         }
 
-        // Decode bounds only to check if resize is needed
+        // Decode bounds only
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
+        var srcW = opts.outWidth
+        var srcH = opts.outHeight
 
-        // Skip if already at exact target (avoids unnecessary Bitmap decode/encode)
-        if (opts.outWidth == targetW && opts.outHeight == targetH && targetJpegQ >= 95) {
+        // Read EXIF rotation and apply it so the Bitmap has correct orientation
+        var exifRotation = 0f
+        try {
+            val exif = ExifInterface(java.io.ByteArrayInputStream(jpegData))
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            exifRotation = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90  -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            if (exifRotation != 0f) {
+                // Swap width/height for 90/270 degree rotations
+                srcW = opts.outHeight; srcH = opts.outWidth
+            }
+        } catch (_: Exception) {}
+
+        // Skip if already within target bounds and high quality
+        if (srcW <= maxW && srcH <= maxH && targetJpegQ >= 95 && exifRotation == 0f) {
             return jpegData
         }
 
         // Calculate inSampleSize for memory-efficient downscaling
-        opts.inSampleSize = calculateInSampleSize(opts, targetW, targetH)
+        opts.inSampleSize = calculateInSampleSize(srcW, srcH, maxW, maxH)
         opts.inJustDecodeBounds = false
 
         var bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
             ?: return jpegData
 
-        // Scale to exact target size
-        val scaled = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
-        if (scaled != bitmap) bitmap.recycle()
-        bitmap = scaled
+        // Apply EXIF rotation
+        if (exifRotation != 0f) {
+            val matrix = Matrix().apply { postRotate(exifRotation) }
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) bitmap.recycle()
+            bitmap = rotated
+        }
 
-        // Re-encode as JPEG
+        // Aspect-ratio-preserving scale: fit within maxW × maxH
+        val (bw: Int, bh: Int) = bitmap.width to bitmap.height
+        val scale = minOf(maxW.toFloat() / bw, maxH.toFloat() / bh)
+        if (scale < 1f) {
+            val dstW = (bw * scale).toInt()
+            val dstH = (bh * scale).toInt()
+            val scaled = Bitmap.createScaledBitmap(bitmap, dstW, dstH, true)
+            if (scaled != bitmap) bitmap.recycle()
+            bitmap = scaled
+        }
+
+        // Re-encode as JPEG (strip EXIF — orientation now baked into pixels)
         val out = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, targetJpegQ, out)
         bitmap.recycle()
 
         val result = out.toByteArray()
-        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes (${opts.outWidth}×${opts.outHeight} → $targetW×$targetH, q=$targetJpegQ)")
+        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes (${bitmap.width}×${bitmap.height}, q=$targetJpegQ, rot=$exifRotation°)")
         return result
     }
 
-    private fun calculateInSampleSize(opts: BitmapFactory.Options, reqW: Int, reqH: Int): Int {
-        val (h: Int, w: Int) = opts.outHeight to opts.outWidth
+    private fun calculateInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int {
         var inSampleSize = 1
-        if (h > reqH || w > reqW) {
-            val halfH = h / 2; val halfW = w / 2
+        if (srcH > reqH || srcW > reqW) {
+            val halfH = srcH / 2; val halfW = srcW / 2
             while (halfH / inSampleSize >= reqH && halfW / inSampleSize >= reqW) {
                 inSampleSize *= 2
             }
