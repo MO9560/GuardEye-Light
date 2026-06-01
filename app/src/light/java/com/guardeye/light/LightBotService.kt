@@ -46,7 +46,7 @@ import java.util.concurrent.Executors
 
 // ── Camera orientation ───────────────────────────────────────────────────────
 // CameraX landscape-shot EXIF: try 90f first, switch to 270f if inverted
-private const val ROTATE_LANDSCAPE = 90f   // 横拍旋转角度：90f 或 270f
+private const val ROTATE_LANDSCAPE = 270f   // 横拍旋转角度：90f 或 270f
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
 // CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
