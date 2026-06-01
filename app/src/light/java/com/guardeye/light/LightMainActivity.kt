@@ -153,7 +153,7 @@ class LightMainActivity : AppCompatActivity() {
 
         // Update interval text with status
         val mins = Config.intervalMinutes
-        ui.textInterval.text = "$mins分"
+        ui.textInterval.text = mins.toString() + "\u5206"
     }
 
     private fun validateConfig(): Boolean {
@@ -173,6 +173,6 @@ class LightMainActivity : AppCompatActivity() {
     }
 
     private fun updateIntervalText(mins: Int) {
-        ui.textInterval.text = "${mins}分"
+        ui.textInterval.text = mins.toString() + "\u5206"
     }
 }
