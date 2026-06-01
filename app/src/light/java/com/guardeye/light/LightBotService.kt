@@ -549,14 +549,30 @@ class LightBotService : LifecycleService() {
             bitmap = rotated
         }
 
-        // Aspect-ratio-preserving scale: fit within maxW × maxH
+        // Center-crop to target aspect ratio, then scale to exact maxW × maxH
         val (bw: Int, bh: Int) = bitmap.width to bitmap.height
-        val scale = minOf(maxW.toFloat() / bw, maxH.toFloat() / bh)
-        if (scale < 1f) {
-            val dstW = (bw * scale).toInt()
-            val dstH = (bh * scale).toInt()
-            val scaled = Bitmap.createScaledBitmap(bitmap, dstW, dstH, true)
-            if (scaled != bitmap) bitmap.recycle()
+        val targetAspect = maxW.toFloat() / maxH
+        val sourceAspect = bw.toFloat() / bh
+
+        var toScale: Bitmap = bitmap
+        if (sourceAspect > targetAspect) {
+            // Source is wider: crop left/right
+            val cropW = (bh * targetAspect).toInt()
+            val cropX = (bw - cropW) / 2
+            val cropped = Bitmap.createBitmap(bitmap, cropX, 0, cropW, bh)
+            if (cropped != bitmap) { bitmap.recycle(); bitmap = cropped; toScale = cropped }
+        } else if (sourceAspect < targetAspect) {
+            // Source is taller: crop top/bottom
+            val cropH = (bw / targetAspect).toInt()
+            val cropY = (bh - cropH) / 2
+            val cropped = Bitmap.createBitmap(bitmap, 0, cropY, bw, cropH)
+            if (cropped != bitmap) { bitmap.recycle(); bitmap = cropped; toScale = cropped }
+        }
+
+        // Scale to exact target resolution
+        if (toScale.width != maxW || toScale.height != maxH) {
+            val scaled = Bitmap.createScaledBitmap(toScale, maxW, maxH, true)
+            if (scaled != toScale) { toScale.recycle(); bitmap.recycle() }
             bitmap = scaled
         }
 
