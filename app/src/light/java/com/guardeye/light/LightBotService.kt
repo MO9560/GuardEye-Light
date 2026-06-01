@@ -40,10 +40,13 @@ import java.util.Locale
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+
+// ── Camera orientation ───────────────────────────────────────────────────────
+// CameraX landscape-shot EXIF: try 90f first, switch to 270f if inverted
+private const val ROTATE_LANDSCAPE = 90f   // 横拍旋转角度：90f 或 270f
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
 // CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
@@ -512,29 +515,12 @@ class LightBotService : LifecycleService() {
         var srcW = opts.outWidth
         var srcH = opts.outHeight
 
-        // Read EXIF rotation and apply it so the Bitmap has correct orientation
-        // Standard EXIF orientation values:
-        //   1 = Normal (no rotation)  |  6 = Rotate 90° CW  |  8 = Rotate 90° CCW
-        //   3 = Rotate 180°
-        var exifRotation = 0f
-        try {
-            val exif = ExifInterface(java.io.ByteArrayInputStream(jpegData))
-            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)
-            exifRotation = when (orientation) {
-                6      -> 90f    // Rotate 90° CW  — landscape / horizontal shot
-                3      -> 180f
-                8      -> 270f   // Rotate 90° CCW — landscape / horizontal shot other way
-                else   -> 0f
-            }
-            if (exifRotation != 0f) {
-                // Swap width/height for 90/270 degree rotations
-                srcW = opts.outHeight; srcH = opts.outWidth
-            }
-            Log.d(TAG, "[exif] orientation=$orientation rotation=${exifRotation}°")
-        } catch (_: Exception) {}
+        // Hardcoded rotation: landscape shots need 90° CW, portrait need none
+        // Adjust ROTATE_LANDSCAPE constant above (90f or 270f) if inverted
+        val rotation = if (srcW > srcH) ROTATE_LANDSCAPE else 0f
 
         // Skip if already within target bounds and high quality
-        if (srcW <= maxW && srcH <= maxH && targetJpegQ >= 95 && exifRotation == 0f) {
+        if (srcW <= maxW && srcH <= maxH && targetJpegQ >= 95 && rotation == 0f) {
             return jpegData
         }
 
@@ -545,9 +531,9 @@ class LightBotService : LifecycleService() {
         var bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
             ?: return jpegData
 
-        // Apply EXIF rotation
-        if (exifRotation != 0f) {
-            val matrix = Matrix().apply { postRotate(exifRotation) }
+        // Apply rotation
+        if (rotation != 0f) {
+            val matrix = Matrix().apply { postRotate(rotation) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
             if (rotated != bitmap) bitmap.recycle()
             bitmap = rotated
@@ -586,7 +572,7 @@ class LightBotService : LifecycleService() {
         bitmap.recycle()
 
         val result = out.toByteArray()
-        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes (${bitmap.width}×${bitmap.height}, q=$targetJpegQ, rot=$exifRotation°)")
+        Log.d(TAG, "[resize] ${jpegData.size} → ${result.size} bytes (${bitmap.width}×${bitmap.height}, q=$targetJpegQ, rot=$rotation°)")
         return result
     }
 
