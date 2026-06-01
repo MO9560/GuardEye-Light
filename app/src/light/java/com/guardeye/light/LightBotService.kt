@@ -340,7 +340,7 @@ class LightBotService : LifecycleService() {
                     "h", "high"   -> PhotoQuality.HIGH
                     "m", "medium" -> PhotoQuality.MEDIUM
                     "l", "low"    -> PhotoQuality.LOW
-                    else           -> PhotoQuality.HIGH
+                    else           -> PhotoQuality.LOW
                 }
                 val label = PhotoQuality.labelFor(quality)
                 TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
@@ -527,6 +527,7 @@ class LightBotService : LifecycleService() {
                 // Swap width/height for 90/270 degree rotations
                 srcW = opts.outHeight; srcH = opts.outWidth
             }
+            Log.d(TAG, "[exif] orientation=$orientation rotation=$exifRotation srcWxH=${srcW}x${srcH}")
         } catch (_: Exception) {}
 
         // Skip if already within target bounds and high quality
