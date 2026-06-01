@@ -3,163 +3,306 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@drawable/bg_gradient">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="24dp">
 
-        <!-- Header -->
+        <!-- ═══ Header row ═══ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingBottom="12dp">
+            android:paddingBottom="24dp">
+            <!-- Settings icon placeholder (left) -->
+            <View
+                android:layout_width="40dp" android:layout_height="40dp"/>
+            <View
+                android:layout_width="0dp" android:layout_height="1dp"
+                android:layout_weight="1"/>
+            <!-- Version badge -->
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="GuardEye Light"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary"/>
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="v3.0"
+                android:id="@+id/textVersion"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="v3.0.1"
                 android:textSize="13sp"
-                android:textColor="@color/text_secondary"/>
+                android:textColor="@color/primary"
+                android:textStyle="bold"
+                android:background="@drawable/badge_bg"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"/>
         </LinearLayout>
 
-        <View android:layout_width="match_parent" android:layout_height="1dp"
-            android:background="@color/divider" android:layout_marginBottom="16dp"/>
+        <!-- ═══ Card 1: Debug Mode + Bot Token ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
 
-        <!-- Bot Config -->
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="BOT CONFIGURATION"
-            android:textSize="11sp" android:textColor="@color/text_secondary"
-            android:letterSpacing="0.1" android:layout_marginBottom="8dp"/>
+            <!-- Debug toggle row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="14dp">
+                <TextView
+                    android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="调试模式"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"/>
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchDebug"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/white"
+                    app:trackTint="@color/switch_track_on"/>
+            </LinearLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/inputToken"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:hint="Bot Token"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp"/>
-        </com.google.android.material.textfield.TextInputLayout>
+            <!-- Divider inside card -->
+            <View
+                android:layout_width="match_parent" android:layout_height="0.5dp"
+                android:background="@color/card_stroke"
+                android:layout_marginBottom="14dp"/>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+            <!-- Token label -->
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Telegram Bot Token"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- Token input with eye toggle -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/inputToken"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:hint="Bot Token"
+                    android:inputType="textPassword"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:background="@android:color/transparent"
+                    android:paddingStart="2dp"
+                    android:paddingEnd="44dp"/>
+                <ImageButton
+                    android:id="@+id/btnToggleToken"
+                    android:layout_width="36dp" android:layout_height="36dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_eye_outline"
+                    app:tint="@color/primary"
+                    android:contentDescription="显示Token"/>
+            </FrameLayout>
+
+            <!-- Chat ID label -->
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Chat ID"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:layout_marginTop="14dp"
+                android:layout_marginBottom="8dp"/>
+
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/inputChatId"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
                 android:hint="Chat ID"
+                android:inputType="textPassword"
                 android:textColor="@color/text_primary"
-                android:textSize="14sp"/>
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Interval -->
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="MONITORING"
-            android:textSize="11sp" android:textColor="@color/text_secondary"
-            android:letterSpacing="0.1" android:layout_marginBottom="8dp"/>
-
-        <LinearLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:layout_marginBottom="4dp">
-            <TextView android:id="@+id/textInterval"
-                android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="间隔：5 分钟"
-                android:textColor="@color/text_primary" android:textSize="14sp"/>
-            <TextView android:id="@+id/textStatus"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="⏸ 已停止"
-                android:textColor="@color/status_red" android:textSize="14sp"/>
+                android:textSize="14sp"
+                android:background="@android:color/transparent"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"/>
         </LinearLayout>
 
-        <com.google.android.material.slider.Slider
-            android:id="@+id/sliderInterval"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:valueFrom="1" android:valueTo="60" android:stepSize="1"
-            android:value="5" android:layout_marginBottom="16dp"/>
-
-        <!-- Debug -->
+        <!-- ═══ Card 2: Status / Interval / Photo ═══ -->
         <LinearLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
+
+            <!-- Status column -->
+            <LinearLayout
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingEnd="8dp">
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="状态"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp"/>
+                <View
+                    android:id="@+id/dotStatus"
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:background="@drawable/status_dot"/>
+            </LinearLayout>
+
+            <!-- Interval column -->
+            <LinearLayout
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingHorizontal="8dp">
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="间隔时间"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp"/>
+                <ImageView
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:src="@drawable/ic_clock"
+                    app:tint="@color/primary"
+                    android:contentDescription="间隔"/>
+                <TextView
+                    android:id="@+id/textInterval"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="5分"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <!-- Photo column -->
+            <LinearLayout
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingStart="8dp">
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="拍照"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp"/>
+                <ImageView
+                    android:layout_width="28dp" android:layout_height="28dp"
+                    android:src="@drawable/ic_image"
+                    app:tint="@color/primary"
+                    android:contentDescription="拍照"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ═══ Card 3: Interval Slider ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
             android:layout_marginBottom="16dp">
-            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:text="Debug Mode"
-                android:textColor="@color/text_primary" android:textSize="14sp"/>
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchDebug"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderInterval"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:valueFrom="1" android:valueTo="60" android:stepSize="1"
+                android:value="5"
+                app:trackColorActive="@color/primary"
+                app:thumbTint="@color/primary"
+                app:hintColor="@color/card_stroke"/>
         </LinearLayout>
 
-        <View android:layout_width="match_parent" android:layout_height="1dp"
-            android:background="@color/divider" android:layout_marginBottom="16dp"/>
-
-        <!-- Actions -->
-        <LinearLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSave"
-                android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:layout_marginEnd="8dp"
-                android:text="保存"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPhoto"
-                android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="拍照"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
-        </LinearLayout>
-
+        <!-- ═══ Start Button ═══ -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnStartStop"
-            android:layout_width="match_parent" android:layout_height="56dp"
-            android:layout_marginTop="8dp"
-            android:text="启动监控"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:text="开始监控"
             android:textSize="16sp"
-            app:backgroundTint="@color/status_green"/>
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            android:backgroundTint="@color/primary"
+            app:cornerRadius="14dp"
+            android:stateListAnimator="@null"
+            android:elevation="0dp"
+            android:layout_marginBottom="12dp"/>
 
-        <!-- Battery optimization hint -->
+        <!-- ═══ Bottom Nav Bar ═══ -->
         <LinearLayout
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="center_vertical"
-            android:layout_marginTop="16dp" android:layout_marginBottom="4dp">
-            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/card_bg"
+            android:gravity="center_vertical"
+            android:paddingVertical="12dp">
+
+            <!-- Settings tab -->
+            <LinearLayout
+                android:id="@+id/tabSettings"
+                android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="🔋 关闭电池优化（推荐）"
-                android:textColor="@color/text_primary" android:textSize="13sp"/>
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnBattery"
-                android:layout_width="wrap_content" android:layout_height="36dp"
-                android:text="设置"
-                android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.TextButton"/>
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp">
+                <ImageView
+                    android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/ic_settings"
+                    app:tint="@color/primary"
+                    android:contentDescription="设置"/>
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="设置"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="3dp"/>
+            </LinearLayout>
+
+            <!-- Help tab -->
+            <LinearLayout
+                android:id="@+id/tabHelp"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp">
+                <ImageView
+                    android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/ic_help_circle"
+                    app:tint="@color/primary"
+                    android:contentDescription="帮助"/>
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="帮助"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="3dp"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- Commands hint -->
+        <!-- Battery hint (subtle) -->
         <TextView
+            android:id="@+id/textBatteryHint"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Commands: /start /stop /photo /status /interval N /debug /battery /test"
-            android:textSize="12sp" android:textColor="@color/text_secondary"
-            android:lineSpacingExtra="2dp"/>
+            android:gravity="center"
+            android:text="🔋 建议关闭电池优化以保持后台运行"
+            android:textSize="11sp"
+            android:textColor="@color/text_hint"/>
 
     </LinearLayout>
 </ScrollView>

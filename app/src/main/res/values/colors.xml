@@ -1,30 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base -->
-    <color name="background">#121212</color>
-    <color name="surface">#1C1C1C</color>
-    <color name="border">#2A2A2A</color>
+    <!-- Light theme (card-style) -->
+    <color name="bg_gradient_start">#E8F4FD</color>
+    <color name="bg_gradient_end">#FFFFFF</color>
+    <color name="card_bg">#FFFFFF</color>
+    <color name="card_stroke">#E0E8F0</color>
 
     <!-- Brand -->
-    <color name="primary">#1976D2</color>
-    <color name="primary_dark">#1565C0</color>
-    <color name="accent">#43A047</color>
+    <color name="primary">#2196F3</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="accent">#4CAF50</color>
 
     <!-- Text -->
-    <color name="text_primary">#E0E0E0</color>
-    <color name="text_secondary">#9E9E9E</color>
-    <color name="text_hint">#666666</color>
+    <color name="text_primary">#1A1A2E</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_hint">#9CA3AF</color>
 
     <!-- Status -->
-    <color name="green">#43A047</color>
-    <color name="red">#E53935</color>
-    <color name="amber">#FFA000</color>
+    <color name="green">#22C55E</color>
+    <color name="red">#EF4444</color>
+    <color name="amber">#F59E0B</color>
 
-    <!-- Light flavor extras (shared with main) -->
-    <color name="bg">#121212</color>
-    <color name="divider">#2A2A2A</color>
-    <color name="status_red">#E53935</color>
-    <color name="status_green">#43A047</color>
-    <color name="switch_track_on">#388E3C</color>
-    <color name="switch_track_off">#424242</color>
+    <!-- Legacy aliases -->
+    <color name="background">@color/bg_gradient_end</color>
+    <color name="surface">@color/card_bg</color>
+    <color name="border">@color/card_stroke</color>
+    <color name="bg">@color/bg_gradient_end</color>
+    <color name="divider">@color/card_stroke</color>
+    <color name="status_red">@color/red</color>
+    <color name="status_green">@color/green</color>
+    <color name="switch_track_on">@color/primary</color>
+    <color name="switch_track_off">#E5E7EB</color>
 </resources>

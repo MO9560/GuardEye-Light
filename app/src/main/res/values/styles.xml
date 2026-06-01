@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.GuardEye" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.GuardEye" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/accent</item>
-        <item name="android:windowBackground">@color/background</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:windowBackground">@drawable/bg_gradient</item>
+        <item name="android:statusBarColor">@color/bg_gradient_start</item>
+        <item name="android:navigationBarColor">@color/bg_gradient_end</item>
     </style>
 </resources>
