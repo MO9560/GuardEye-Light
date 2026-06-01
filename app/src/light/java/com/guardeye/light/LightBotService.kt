@@ -513,21 +513,24 @@ class LightBotService : LifecycleService() {
         var srcH = opts.outHeight
 
         // Read EXIF rotation and apply it so the Bitmap has correct orientation
+        // Standard EXIF orientation values:
+        //   1 = Normal (no rotation)  |  6 = Rotate 90° CW  |  8 = Rotate 90° CCW
+        //   3 = Rotate 180°
         var exifRotation = 0f
         try {
             val exif = ExifInterface(java.io.ByteArrayInputStream(jpegData))
-            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)
             exifRotation = when (orientation) {
-                ExifInterface.ORIENTATION_ROTATE_90  -> 90f
-                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                else -> 0f
+                6      -> 90f    // Rotate 90° CW  — landscape / horizontal shot
+                3      -> 180f
+                8      -> 270f   // Rotate 90° CCW — landscape / horizontal shot other way
+                else   -> 0f
             }
             if (exifRotation != 0f) {
                 // Swap width/height for 90/270 degree rotations
                 srcW = opts.outHeight; srcH = opts.outWidth
             }
-            Log.d(TAG, "[exif] orientation=$orientation rotation=$exifRotation srcWxH=${srcW}x${srcH}")
+            Log.d(TAG, "[exif] orientation=$orientation rotation=${exifRotation}°")
         } catch (_: Exception) {}
 
         // Skip if already within target bounds and high quality
