@@ -749,10 +749,15 @@ class LightBotService : LifecycleService() {
                     "manual" -> "\ud83d\udcf8 \u624b\u52a8"
                     else -> source
                 }
+                val sourceResLabel = when (source) {
+                    "interval" -> "\u5b9a\u65f6\uff081280\u00d77120\uff09"
+                    else -> "\u624b\u52a8\uff08854\u00d7480\uff09"
+                }
                 val msg = buildString {
-                    append("\u23f0 $now \uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
+                    append("\u23f0 $now\n")
+                    append("\uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
                     append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%\n")
-                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceLabel ($resLabel)\n")
+                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceResLabel\n")
                     append("\u2500".repeat(14) + "\n")
                     append("\uD83D\uDCCB /photo \uD83D\uDCCB /status")
                 }
