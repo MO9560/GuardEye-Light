@@ -736,7 +736,26 @@ class LightBotService : LifecycleService() {
 
                 // Post-process: resize JPEG to target quality
                 val finalData = resizeJpeg(jpegData, quality)
-                val msg = "/photo > :status"
+                val resLabel = when (quality) {
+                    "h" -> "1920\u00d71080"
+                    "m" -> "1280\u00d7720"
+                    "l" -> "854\u00d7480"
+                    else -> "1280\u00d7720"
+                }
+                val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+                val battery = getBatteryLevel()
+                val sourceLabel = when (source) {
+                    "interval" -> "\u23f0 \u5b9a\u65f6"
+                    "manual" -> "\ud83d\udcf8 \u624b\u52a8"
+                    else -> source
+                }
+                val msg = buildString {
+                    append("\u23f0 $now \u95f4\u9694\uff1a")
+                    append("\ud83d\udd0b \u7535\u91cf\uff1a$battery%\n")
+                    append("\ud83d\udccd \u6765\u6e90\uff1a$sourceLabel ($resLabel)\n")
+                    append("\u2500".repeat(15) + "\n")
+                    append("\ud83d\udccb /photo \ud83d\udccb")
+                }
 
                 if (Config.debugMode) {
                     Log.d(TAG, "Sending photo to $chatId — ${finalData.size} bytes, quality=$quality")
@@ -754,24 +773,17 @@ class LightBotService : LifecycleService() {
         val interval = Config.intervalMinutes
         val enabled = Config.enabled
         val mode = Config.debugMode
-        val wlStatus = if (wakeLock.isHeld) "✅ 已持有" else "⚠️ 未持有"
         return buildString {
-            append("📸 GuardEye Light\n")
-            append("状态：${if (enabled) "✅ 监控中" else "⏸ 已停止"}\n")
-            append("间隔：$interval 分钟\n")
-            append("电量：$battery%\n")
-            append("WakeLock：$wlStatus\n")
-            append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
-            append("版本：${BuildConfig.VERSION_NAME}\n")
-            append("─".repeat(16) + "\n")
-            append("/photo > :status\n")
-            append("📋 指令列表：\n")
-            append("/start — 启动监控\n")
-            append("/stop — 停止监控\n")
-            append("/photo[h|m|l] — 拍照（后缀指定分辨率）\n")
-            append("/interval N — 间隔（分钟，1-60）\n")
-            append("/battery — 电池优化设置\n")
-            append("/debug on|off — 调试模式")
+            append("\u2b50 GuardEye Light v${BuildConfig.VERSION_NAME}\n")
+            append("\u72b6\u6001\uff1a${if (enabled) "\u2705 \u76d1\u63a7\u4e2d" else "\u23f8 \u5df2\u505c\u6b62"} | \u95f4\u9694\uff1a$interval \u5206\u949f | \u7535\u91cf\uff1a$battery%\n")
+            append("\u8c03\u8bd5\uff1a${if (mode) "\ud83d\udc27 \u5f00\u542f" else "\u274c \u5173\u95ed"}\n")
+            append("\u2500".repeat(16) + "\n")
+            append("\ud83d\udccb /photo [h|m|l]\n")
+            append("\ud83d\udccb /status\n")
+            append("\ud83d\udcc3 /interval N\n")
+            append("\ud83d\udcc3 /battery\n")
+            append("\ud83d\udcc3 /debug on|off\n")
+            append("\ud83d\udcc3 /start | /stop")
         }
     }
 
