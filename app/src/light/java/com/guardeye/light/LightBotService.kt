@@ -1,4 +1,4 @@
-package com.guardeye.light
+﻿package com.guardeye.light
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -46,10 +46,11 @@ import java.util.concurrent.Executors
 private const val ROTATE_LANDSCAPE = 270f   // 横拍旋转角度：90f 或 270f
 
 // ── Intent actions (top-level for easy cross-class access) ─────────────────
-const val ACTION_CAPTURE         = "com.guardeye.light.ACTION_CAPTURE"
-const val ACTION_MANUAL_CAPTURE  = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
-const val ACTION_STOP            = "com.guardeye.light.ACTION_STOP"
-const val ACTION_REQUEST_BATTERY = "com.guardeye.light.ACTION_REQUEST_BATTERY"
+const val ACTION_CAPTURE          = "com.guardeye.light.ACTION_CAPTURE"
+const val ACTION_MANUAL_CAPTURE   = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
+const val ACTION_STOP             = "com.guardeye.light.ACTION_STOP"
+const val ACTION_REQUEST_BATTERY  = "com.guardeye.light.ACTION_REQUEST_BATTERY"
+const val ACTION_PREVIEW_FRONT    = "com.guardeye.light.ACTION_PREVIEW_FRONT"
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
 // CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
@@ -102,6 +103,11 @@ class LightBotService : LifecycleService() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var captureTimeoutRunnable: Runnable? = null
     private var cameraReady = false
+
+    // ── Front camera preview ──────────────────────────────────────────
+    private var previewJob: Job? = null
+    private var isFrontPreview = false
+    private var previewEndTime = 0L
 
     // ── Lifecycle — stays STARTED even when app is in background ──────
     private val cameraLifecycleOwner = CameraLifecycleOwner()
@@ -203,6 +209,9 @@ class LightBotService : LifecycleService() {
         cameraLifecycleOwner.start()
 
         when (intent?.action) {
+            ACTION_PREVIEW_FRONT -> {
+                startFrontPreview(chatId = Config.chatId)
+            }
             ACTION_CAPTURE, ACTION_MANUAL_CAPTURE -> {
                 val source = if (intent.action == ACTION_CAPTURE) "interval" else "ui"
                 captureAndSend(source = source, chatId = Config.chatId)
@@ -340,17 +349,29 @@ class LightBotService : LifecycleService() {
                 LightAlarmReceiver.cancelAlarm(this)
                 TelegramBot.sendText(token, chatId, "⏸ 已停止")
             }
+            text.startsWith("/preview") -> {
+                TelegramBot.sendText(token, chatId, "📷 开启前镜头预览，30秒后自动关闭")
+                startFrontPreview(chatId = chatId)
+            }
             text.startsWith("/photo") -> {
                 val raw = text.removePrefix("/photo").trim().lowercase()
-                val quality = when (raw) {
+                val isFront = raw.startsWith("f ") || raw.startsWith("f")
+                val qualityRaw = if (isFront) raw.removePrefix("f").trim() else raw
+                val quality = when (qualityRaw) {
                     "h", "high"   -> PhotoQuality.HIGH
                     "m", "medium" -> PhotoQuality.MEDIUM
                     "l", "low"    -> PhotoQuality.LOW
                     else           -> PhotoQuality.LOW
                 }
                 val label = PhotoQuality.labelFor(quality)
-                TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
-                captureAndSend(source = "command", chatId = chatId, quality = quality)
+                val source = if (isFront) "front" else "command"
+                if (isFront) {
+                    TelegramBot.sendText(token, chatId, "🤳 前镜头拍照中... [$label]")
+                    captureFrontCamera(chatId = chatId, quality = quality)
+                } else {
+                    TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
+                    captureAndSend(source = "command", chatId = chatId, quality = quality)
+                }
             }
             text == "/status" -> {
                 TelegramBot.sendText(token, chatId, buildStatusText())
@@ -412,7 +433,7 @@ class LightBotService : LifecycleService() {
         }
     }
 
-    private fun captureWithWait(source: String, chatId: String?, quality: String) {
+    private fun captureWithWait(source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         // CameraX always shoots at HIGH; post-processing handles resize/compress.
         // No rebind needed — stable single-session capture.
 
@@ -425,23 +446,27 @@ class LightBotService : LifecycleService() {
             return
         }
 
+        captureWithImageCapture(imgCapture, source, chatId, quality)
+    }
+
+    private fun captureWithImageCapture(imgCapture: ImageCapture, source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         cameraLifecycleOwner.start()
         capturing = true
 
         // 15-second timeout guard
         val timeoutRunnable = Runnable {
             Log.e(TAG, "Capture timeout — no callback in 15s (source=$source)")
-            synchronized(this) { captureTimeoutRunnable = null }
+            synchronized(this@LightBotService) { captureTimeoutRunnable = null }
             capturing = false
             if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "❌ 拍照超时（15秒无响应），请检查相机是否被其他应用占用")
+                TelegramBot.sendText(Config.botToken, chatId, "\u274c \u62cd\u7167\u8d85\u65f6\uff0815\u79d2\u65e0\u54cd\u5e94\uff09\uff0c\u8bf7\u68c0\u67e5\u76f8\u673a\u662f\u5426\u88ab\u5176\u4ed6\u5e94\u7528\u5360\u7528")
             }
         }
         captureTimeoutRunnable = timeoutRunnable
         mainHandler.postDelayed(timeoutRunnable, 15_000L)
 
         try {
-            Log.d(TAG, "Taking picture with pre-bound ImageCapture (source=$source)")
+            Log.d(TAG, "Taking picture (source=$source)")
             imgCapture.takePicture(
                 cameraExecutor,
                 object : ImageCapture.OnImageCapturedCallback() {
@@ -457,6 +482,7 @@ class LightBotService : LifecycleService() {
                         capturing = false
                         Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source, quality=$quality")
                         processAndSend(data, source, quality)
+                        onDone?.invoke()
                     }
 
                     override fun onError(exception: ImageCaptureException) {
@@ -468,13 +494,14 @@ class LightBotService : LifecycleService() {
                         capturing = false
                         if (chatId != null) {
                             val msg = when (exception.imageCaptureError) {
-                                ImageCapture.ERROR_CAMERA_CLOSED -> "❌ 相机被关闭，请重试"
-                                ImageCapture.ERROR_FILE_IO       -> "❌ 写入照片失败（存储空间不足？）"
-                                ImageCapture.ERROR_UNKNOWN       -> "❌ 拍照失败：${exception.message}"
-                                else                             -> "❌ 拍照失败（${exception.imageCaptureError}）：${exception.message}"
+                                ImageCapture.ERROR_CAMERA_CLOSED -> "\u274c \u76f8\u673a\u88ab\u5173\u95ed\uff0c\u8bf7\u91cd\u8bd5"
+                                ImageCapture.ERROR_FILE_IO       -> "\u274c \u5199\u5165\u7167\u7247\u5931\u6548\uff08\u5b58\u50a8\u7a7a\u95f4\uff09"
+                                ImageCapture.ERROR_UNKNOWN       -> "\u274c \u62cd\u7167\u5931\u6548\uff1a${exception.message}"
+                                else                             -> "\u274c \u62cd\u7167\u5931\u6548\uff08${exception.imageCaptureError}\uff09\uff1a${exception.message}"
                             }
                             TelegramBot.sendText(Config.botToken, chatId, msg)
                         }
+                        onDone?.invoke()
                     }
                 }
             )
@@ -483,10 +510,119 @@ class LightBotService : LifecycleService() {
             Log.e(TAG, "takePicture threw: ${e.javaClass.simpleName}", e)
             capturing = false
             if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "❌ 拍照失败：${e.javaClass.simpleName}")
+                TelegramBot.sendText(Config.botToken, chatId, "\u274c \u62cd\u7167\u5931\u6548\uff1a${e.javaClass.simpleName}")
+            }
+            onDone?.invoke()
+        }
+    }
+
+    // ── Front camera capture ──────────────────────────────────────────────────
+
+    private fun captureFrontCamera(chatId: String, quality: String) {
+        val provider = cameraProvider
+        if (provider == null) {
+            TelegramBot.sendText(Config.botToken, chatId, "❌ 相机未就绪，请稍后重试")
+            return
+        }
+        if (capturing) {
+            TelegramBot.sendText(Config.botToken, chatId, "⚠️ 相机正忙，请稍后重试")
+            return
+        }
+
+        mainHandler.post {
+            try {
+                val imgCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetResolution(Size(PhotoQuality.HIGH_W, PhotoQuality.HIGH_H))
+                    .setJpegQuality(95)
+                    .build()
+
+                provider.unbindAll()
+                provider.bindToLifecycle(
+                    cameraLifecycleOwner,
+                    CameraSelector.DEFAULT_FRONT_CAMERA,
+                    imgCapture
+                )
+
+                captureWithImageCapture(imgCapture, "front", chatId, quality) {
+                    // Restore back camera after capture
+                    mainHandler.postDelayed({
+                        bindImageCapture()
+                    }, 500)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Front camera capture failed", e)
+                TelegramBot.sendText(Config.botToken, chatId, "❌ 前镜头拍照失败：${e.javaClass.simpleName}")
+                bindImageCapture()
             }
         }
     }
+
+    // ── Front camera preview ─────────────────────────────────────────────────
+
+    private fun startFrontPreview(chatId: String) {
+        // Cancel any existing preview
+        previewJob?.cancel()
+        isFrontPreview = true
+        previewEndTime = System.currentTimeMillis() + 30_000L
+
+        previewJob = cmdScope.launch {
+            try {
+                TelegramBot.sendText(Config.botToken, chatId, "📷 前镜头预览开启（30秒）\n发送 /stop 或 /preview 可中断")
+                var frameCount = 0
+                while (isFrontPreview && System.currentTimeMillis() < previewEndTime) {
+                    captureFrontCameraSilent(chatId)
+                    frameCount++
+                    delay(2_000L) // 2s per frame
+                }
+                if (isFrontPreview) {
+                    TelegramBot.sendText(Config.botToken, chatId, "⏹ 预览已结束（共 $frameCount 帧）")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Preview error", e)
+            } finally {
+                isFrontPreview = false
+                mainHandler.post { bindImageCapture() }
+            }
+        }
+    }
+
+    private fun captureFrontCameraSilent(chatId: String) {
+        val provider = cameraProvider ?: return
+        val scope = this
+
+        try {
+            val imgCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetResolution(Size(480, 640))
+                .setJpegQuality(40)
+                .build()
+
+            provider.unbindAll()
+            provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, imgCapture)
+
+            cameraLifecycleOwner.start()
+
+            imgCapture.takePicture(
+                cameraExecutor,
+                object : ImageCapture.OnImageCapturedCallback() {
+                    override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                        val buf = image.planes[0].buffer
+                        val data = ByteArray(buf.remaining())
+                        buf.get(data)
+                        image.close()
+                        try {
+                            TelegramBot.sendPhoto(Config.botToken, chatId, data,
+                                "📷 [${(System.currentTimeMillis() - previewEndTime + 30000) / 1000}s]")
+                        } catch (_: Exception) {}
+                    }
+                    override fun onError(ex: ImageCaptureException) {}
+                }
+            )
+        } catch (e: Exception) {
+        }
+    }
+
 
     private fun shutdownCameraNow() {
         try { cameraProvider?.unbindAll() } catch (_: Exception) {}
