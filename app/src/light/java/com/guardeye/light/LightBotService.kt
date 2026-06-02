@@ -1,4 +1,4 @@
-﻿package com.guardeye.light
+package com.guardeye.light
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -750,11 +750,11 @@ class LightBotService : LifecycleService() {
                     else -> source
                 }
                 val msg = buildString {
-                    append("\u23f0 $now \u95f4\u9694\uff1a")
-                    append("\ud83d\udd0b \u7535\u91cf\uff1a$battery%\n")
-                    append("\ud83d\udccd \u6765\u6e90\uff1a$sourceLabel ($resLabel)\n")
-                    append("\u2500".repeat(15) + "\n")
-                    append("\ud83d\udccb /photo \ud83d\udccb")
+                    append("\u23f0 $now \uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
+                    append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%\n")
+                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceLabel ($resLabel)\n")
+                    append("\u2500".repeat(14) + "\n")
+                    append("\uD83D\uDCCB /photo \uD83D\uDCCB /status")
                 }
 
                 if (Config.debugMode) {
@@ -774,16 +774,20 @@ class LightBotService : LifecycleService() {
         val enabled = Config.enabled
         val mode = Config.debugMode
         return buildString {
-            append("\u2b50 GuardEye Light v${BuildConfig.VERSION_NAME}\n")
-            append("\u72b6\u6001\uff1a${if (enabled) "\u2705 \u76d1\u63a7\u4e2d" else "\u23f8 \u5df2\u505c\u6b62"} | \u95f4\u9694\uff1a$interval \u5206\u949f | \u7535\u91cf\uff1a$battery%\n")
-            append("\u8c03\u8bd5\uff1a${if (mode) "\ud83d\udc27 \u5f00\u542f" else "\u274c \u5173\u95ed"}\n")
-            append("\u2500".repeat(16) + "\n")
-            append("\ud83d\udccb /photo [h|m|l]\n")
-            append("\ud83d\udccb /status\n")
-            append("\ud83d\udcc3 /interval N\n")
-            append("\ud83d\udcc3 /battery\n")
-            append("\ud83d\udcc3 /debug on|off\n")
-            append("\ud83d\udcc3 /start | /stop")
+            append("\u7248\u672c\uff1a${BuildConfig.VERSION_NAME}\n")
+            append("\u2500".repeat(15) + "\n")
+            append("\u72b6\u6001\uff1a${if (enabled) "\u2705 \u76d1\u63a7\u4e2d" else "\u23f8 \u5df2\u505c\u6b62"}\n")
+            append("\u8c03\u8bd5\uff1a${if (mode) "\u2705 \u5f00\u542f" else "\u274c \u5173\u95ed"}\n")
+            append("\u95f4\u9694\uff1a$interval \u5206\u949f\n")
+            append("\u7535\u91cf\uff1a$battery%\n")
+            append("\u2500".repeat(15) + "\n")
+            append("\uD83D\uDCCB \u6307\u4ee4\u5217\u8868\uff1a\n")
+            append("/start \u2014 \u542f\u52a8\u76d1\u63a7\n")
+            append("/stop \u2014 \u505c\u6b62\u76d1\u63a7\n")
+            append("/photo \u2014 \u62cd\u7167\uff08f|r\uff09\n")
+            append("/interval \u2014 \u95f4\u9694\uff08\u5206\u949f\uff09\n")
+            append("/battery \u2014 \u7535\u6c60\u4f18\u5316\u8bbe\u7f6e\n")
+            append("/debug on|off \u2014 \u8c03\u8bd5\u6a21\u5f0f")
         }
     }
 
