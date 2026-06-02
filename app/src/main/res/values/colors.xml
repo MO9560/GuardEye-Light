@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Light theme (card-style) -->
+    <!-- Light Blue Theme (card-style) -->
     <color name="bg_gradient_start">#E8F4FD</color>
-    <color name="bg_gradient_end">#FFFFFF</color>
+    <color name="bg_gradient_end">#F0F8FF</color>
     <color name="card_bg">#FFFFFF</color>
-    <color name="card_stroke">#E0E8F0</color>
+    <color name="card_stroke">#C8E6F8</color>
 
-    <!-- Brand -->
+    <!-- Brand: Light Blue -->
     <color name="primary">#2196F3</color>
     <color name="primary_dark">#1976D2</color>
-    <color name="accent">#4CAF50</color>
+    <color name="accent">#039BE5</color>
 
     <!-- Text -->
     <color name="text_primary">#1A1A2E</color>

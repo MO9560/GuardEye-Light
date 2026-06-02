@@ -600,7 +600,7 @@ class LightBotService : LifecycleService() {
 
                 // Post-process: resize JPEG to target quality
                 val finalData = resizeJpeg(jpegData, quality)
-                val msg = "/photo =★= /status"
+                val msg = "/photo > :status"
 
                 if (Config.debugMode) {
                     Log.d(TAG, "Sending photo to $chatId — ${finalData.size} bytes, quality=$quality")
@@ -627,8 +627,15 @@ class LightBotService : LifecycleService() {
             append("WakeLock：$wlStatus\n")
             append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
             append("版本：${BuildConfig.VERSION_NAME}\n")
-            append("=★= /photo\n")
-            append("=★= /status")
+            append("─".repeat(16) + "\n")
+            append("/photo > :status\n")
+            append("📋 指令列表：\n")
+            append("/start — 启动监控\n")
+            append("/stop — 停止监控\n")
+            append("/photo[h|m|l] — 拍照（后缀指定分辨率）\n")
+            append("/interval N — 间隔（分钟，1-60）\n")
+            append("/battery — 电池优化设置\n")
+            append("/debug on|off — 调试模式")
         }
     }
 
