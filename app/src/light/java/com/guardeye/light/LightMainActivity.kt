@@ -75,6 +75,13 @@ class LightMainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        // Save config button
+        ui.btnSaveConfig.setOnClickListener {
+            if (!validateConfig()) return@setOnClickListener
+            saveConfig()
+            Toast.makeText(this, "\u4fdd\u5b58\u6210\u529f", Toast.LENGTH_SHORT).show()
+        }
+
         // Token visibility toggle
         ui.btnToggleToken.setOnClickListener {
             tokenVisible = !tokenVisible
