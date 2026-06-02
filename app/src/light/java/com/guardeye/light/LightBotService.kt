@@ -34,9 +34,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -47,6 +44,12 @@ import java.util.concurrent.Executors
 // ── Camera orientation ───────────────────────────────────────────────────────
 // CameraX landscape-shot EXIF: try 90f first, switch to 270f if inverted
 private const val ROTATE_LANDSCAPE = 270f   // 横拍旋转角度：90f 或 270f
+
+// ── Intent actions (top-level for easy cross-class access) ─────────────────
+const val ACTION_CAPTURE         = "com.guardeye.light.ACTION_CAPTURE"
+const val ACTION_MANUAL_CAPTURE  = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
+const val ACTION_STOP            = "com.guardeye.light.ACTION_STOP"
+const val ACTION_REQUEST_BATTERY = "com.guardeye.light.ACTION_REQUEST_BATTERY"
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
 // CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
@@ -544,19 +547,18 @@ class LightBotService : LifecycleService() {
         val targetAspect = maxW.toFloat() / maxH
         val sourceAspect = bw.toFloat() / bh
 
-        var toScale: Bitmap = bitmap
-        if (sourceAspect > targetAspect) {
-            // Source is wider: crop left/right
-            val cropW = (bh * targetAspect).toInt()
-            val cropX = (bw - cropW) / 2
-            val cropped = Bitmap.createBitmap(bitmap, cropX, 0, cropW, bh)
-            if (cropped != bitmap) { bitmap.recycle(); bitmap = cropped; toScale = cropped }
-        } else if (sourceAspect < targetAspect) {
+        // 只裁上下，不裁左右。左右超出时等比缩放（加黑边方式）
+        val toScale: Bitmap
+        if (sourceAspect < targetAspect) {
             // Source is taller: crop top/bottom
             val cropH = (bw / targetAspect).toInt()
             val cropY = (bh - cropH) / 2
             val cropped = Bitmap.createBitmap(bitmap, 0, cropY, bw, cropH)
-            if (cropped != bitmap) { bitmap.recycle(); bitmap = cropped; toScale = cropped }
+            if (cropped != bitmap) { bitmap.recycle(); bitmap = cropped }
+            toScale = cropped
+        } else {
+            // Source is wider or same: scale to fit (no crop left/right)
+            toScale = bitmap
         }
 
         // Scale to exact target resolution
@@ -598,24 +600,7 @@ class LightBotService : LifecycleService() {
 
                 // Post-process: resize JPEG to target quality
                 val finalData = resizeJpeg(jpegData, quality)
-
-                val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-                val battery = getBatteryLevel()
-                val resLabel = PhotoQuality.labelFor(quality)
-                val sourceLabel = when (source) {
-                    "interval" -> "定时"
-                    "ui"      -> "App"
-                    else       -> "手动"
-                }
-                val msg = buildString {
-                    append("📸 GuardEye Light\n")
-                    append("⏰ $now\n")
-                    append("🔋 电量：$battery%\n")
-                    append("📍 来源：$sourceLabel\n")
-                    append("─────────────────\n")
-                    append("📋 /photo （$resLabel）\n")
-                    append("📋 /status")
-                }
+                val msg = "/photo =★= /status"
 
                 if (Config.debugMode) {
                     Log.d(TAG, "Sending photo to $chatId — ${finalData.size} bytes, quality=$quality")
@@ -636,22 +621,14 @@ class LightBotService : LifecycleService() {
         val wlStatus = if (wakeLock.isHeld) "✅ 已持有" else "⚠️ 未持有"
         return buildString {
             append("📸 GuardEye Light\n")
-            append("─────────────────\n")
             append("状态：${if (enabled) "✅ 监控中" else "⏸ 已停止"}\n")
             append("间隔：$interval 分钟\n")
             append("电量：$battery%\n")
             append("WakeLock：$wlStatus\n")
             append("调试：${if (mode) "🐛 开启" else "❌ 关闭"}\n")
             append("版本：${BuildConfig.VERSION_NAME}\n")
-            append("─────────────────\n")
-            append("📋 指令列表：\n")
-            append("/start — 启动监控\n")
-            append("/stop  — 停止监控\n")
-            append("/photo [high|medium|low] — 拍照\n")
-            append("/status — 状态\n")
-            append("/interval N — 间隔(分钟)\n")
-            append("/battery — 电池优化设置\n")
-            append("/debug [on|off] — 调试模式")
+            append("=★= /photo\n")
+            append("=★= /status")
         }
     }
 
@@ -689,10 +666,6 @@ class LightBotService : LifecycleService() {
 
     companion object {
         private const val TAG = "LightBotService"
-        const val ACTION_CAPTURE        = "com.guardeye.light.ACTION_CAPTURE"
-        const val ACTION_MANUAL_CAPTURE = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
-        const val ACTION_STOP           = "com.guardeye.light.ACTION_STOP"
-        const val ACTION_REQUEST_BATTERY = "com.guardeye.light.ACTION_REQUEST_BATTERY"
     }
 }
 

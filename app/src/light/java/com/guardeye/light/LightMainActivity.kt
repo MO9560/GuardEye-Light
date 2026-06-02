@@ -12,6 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.guardeye.Config
+import com.guardeye.light.ACTION_MANUAL_CAPTURE
+import com.guardeye.light.ACTION_REQUEST_BATTERY
 import com.guardeye.R
 import com.guardeye.databinding.LightActivityMainBinding
 
@@ -117,7 +119,7 @@ class LightMainActivity : AppCompatActivity() {
             if (!validateConfig()) return@setOnClickListener
             saveConfig()
             val svc = Intent(this, LightBotService::class.java).apply {
-                action = LightBotService.ACTION_MANUAL_CAPTURE
+                action = ACTION_MANUAL_CAPTURE
             }
             startForegroundService(svc)
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
@@ -126,7 +128,7 @@ class LightMainActivity : AppCompatActivity() {
         // Battery hint tap → open settings
         ui.textBatteryHint.setOnClickListener {
             val intent = Intent(this, LightBotService::class.java).apply {
-                action = LightBotService.ACTION_REQUEST_BATTERY
+                action = ACTION_REQUEST_BATTERY
             }
             startForegroundService(intent)
             Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()

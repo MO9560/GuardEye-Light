@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.guardeye.Config
+import com.guardeye.light.ACTION_CAPTURE
 
 class LightAlarmReceiver : BroadcastReceiver() {
 
@@ -18,7 +19,7 @@ class LightAlarmReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Alarm fired — starting LightBotService capture")
         val i = Intent(ctx, LightBotService::class.java).apply {
-            action = LightBotService.ACTION_CAPTURE
+            action = ACTION_CAPTURE
         }
         ctx.startForegroundService(i)
 
