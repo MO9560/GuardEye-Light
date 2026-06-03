@@ -738,28 +738,29 @@ class LightBotService : LifecycleService() {
 
                 // Post-process: resize JPEG to target quality
                 val finalData = resizeJpeg(jpegData, quality)
-                val resLabel = when (quality) {
-                    "h" -> "1920\u00d71080"
-                    "m" -> "1280\u00d7720"
-                    "l" -> "854\u00d7480"
-                    else -> "1280\u00d7720"
+
+                // Read actual image dimensions from the resized output
+                var actualW = 0; var actualH = 0
+                runCatching {
+                    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(finalData, 0, finalData.size, opts)
+                    actualW = opts.outWidth; actualH = opts.outHeight
                 }
+                val resStr = if (actualW > 0 && actualH > 0) "$actualW×$actualH" else "?"
+
                 val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 val battery = getBatteryLevel()
                 val sourceLabel = when (source) {
-                    "interval" -> "\u23f0 \u5b9a\u65f6"
-                    "manual" -> "\ud83d\udcf8 \u624b\u52a8"
+                    "interval" -> "③ 定时"
+                    "manual" -> "② APP"
+                    "telegram" -> "④ TEL"
                     else -> source
-                }
-                val sourceResLabel = when (source) {
-                    "interval" -> "\u5b9a\u65f6\uff081280\u00d77120\uff09"
-                    else -> "\u624b\u52a8\uff08854\u00d7480\uff09"
                 }
                 val msg = buildString {
                     append("\u23f0 $now\n")
                     append("\uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
                     append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%\n")
-                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceResLabel\n")
+                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceLabel ($resStr)\n")
                     append("\u2500".repeat(14) + "\n")
                     append("\uD83D\uDCCB /photo \uD83D\uDCCB /status")
                 }
