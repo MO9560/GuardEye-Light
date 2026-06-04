@@ -782,6 +782,7 @@ class LightBotService : LifecycleService() {
 
                 val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 val battery = getBatteryLevel()
+                val temp = getBatteryTemperature()
                 val sourceLabel = when (source) {
                     "interval" -> "定时"
                     "ui"       -> "APP"
@@ -789,10 +790,11 @@ class LightBotService : LifecycleService() {
                     "front"    -> "前镜头"
                     else       -> source
                 }
+                val tempStr = if (temp > 0) "$temp\u2103" else "-"
                 val msg = buildString {
                     append("\u23f0 $now\n")
                     append("\uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
-                    append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%\n")
+                    append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%   \uD83C\uDF21\ufe0f $tempStr\n")
                     append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceLabel ($resStr)\n")
                     append("\u2500".repeat(14) + "\n")
                     append("\uD83D\uDCCB /photo \uD83D\uDCCB /status")
@@ -811,6 +813,7 @@ class LightBotService : LifecycleService() {
 
     private fun buildStatusText(): String {
         val battery = getBatteryLevel()
+        val temp = getBatteryTemperature()
         val interval = Config.intervalMinutes
         val enabled = Config.enabled
         val mode = Config.debugMode
@@ -821,14 +824,13 @@ class LightBotService : LifecycleService() {
             append("\u8c03\u8bd5\uff1a${if (mode) "\u2705 \u5f00\u542f" else "\u274c \u5173\u95ed"}\n")
             append("\u95f4\u9694\uff1a$interval \u5206\u949f\n")
             append("\u7535\u91cf\uff1a$battery%\n")
+            append("\u706b\u70ac\u6e29\u5ea6\uff1a${if (temp > 0) "${temp}℃" else "-"}\n")
             append("\u2500".repeat(15) + "\n")
             append("\uD83D\uDCCB \u6307\u4ee4\u5217\u8868\uff1a\n")
             append("/start \u2014 \u542f\u52a8\u76d1\u63a7\n")
             append("/stop \u2014 \u505c\u6b62\u76d1\u63a7\n")
-            append("/photo \u2014 \u62cd\u7167\uff08f|h|m|l|x\uff09\n")
-            append("/interval \u2014 \u95f4\u9694\uff08\u5206\u949f\uff09\n")
-            append("/battery \u2014 \u7535\u6c60\u4f18\u5316\u8bbe\u7f6e\n")
-            append("/debug on|off \u2014 \u8c03\u8bd5\u6a21\u5f0f")
+            append("/photo \u2014 \u62cd\u7167\n")
+            append("/interval \u2014 \u95f4\u9694\uff08\u5206\u949f\uff09")
         }
     }
 
@@ -838,6 +840,15 @@ class LightBotService : LifecycleService() {
             val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
             val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
             (level * 100 / scale)
+        } catch (e: Exception) { -1 }
+    }
+
+    // 电池温度（℃），系统返回十分之一度
+    private fun getBatteryTemperature(): Int {
+        return try {
+            val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val temp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+            if (temp > 0) temp / 10 else -1
         } catch (e: Exception) { -1 }
     }
 
