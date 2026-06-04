@@ -53,11 +53,13 @@ const val ACTION_REQUEST_BATTERY  = "com.guardeye.light.ACTION_REQUEST_BATTERY"
 const val ACTION_PREVIEW_FRONT    = "com.guardeye.light.ACTION_PREVIEW_FRONT"
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
-// CameraX always shoots at HIGH (1920×1080); post-processing resizes/compresses.
+// H/M/L/X: post-processing rescales to target size
+// X: original — no resize, no recompress
 object PhotoQuality {
-    const val HIGH   = "high"
-    const val MEDIUM = "medium"
-    const val LOW    = "low"
+    const val HIGH   = "h"
+    const val MEDIUM = "m"
+    const val LOW    = "l"
+    const val RAW    = "x"   // 原图，不缩不放
 
     // Target display sizes (used for post-processing resize)
     const val HIGH_W   = 1920; const val HIGH_H   = 1080
@@ -69,13 +71,16 @@ object PhotoQuality {
         HIGH   -> 95
         MEDIUM -> 70
         LOW    -> 50
+        RAW    -> 95   // X 原图：直出，只 strip EXIF
         else   -> 95
     }
 
+    // Display label for caption
     fun labelFor(quality: String): String = when (quality.lowercase()) {
         HIGH   -> "1920×1080"
         MEDIUM -> "1280×720"
         LOW    -> "854×480"
+        RAW    -> "原图"
         else   -> "1920×1080"
     }
 }
@@ -358,19 +363,19 @@ class LightBotService : LifecycleService() {
                 val isFront = raw.startsWith("f ") || raw.startsWith("f")
                 val qualityRaw = if (isFront) raw.removePrefix("f").trim() else raw
                 val quality = when (qualityRaw) {
-                    "h", "high"   -> PhotoQuality.HIGH
-                    "m", "medium" -> PhotoQuality.MEDIUM
-                    "l", "low"    -> PhotoQuality.LOW
-                    else           -> PhotoQuality.LOW
+                    "h" -> PhotoQuality.HIGH
+                    "m" -> PhotoQuality.MEDIUM
+                    "l" -> PhotoQuality.LOW
+                    "x" -> PhotoQuality.RAW
+                    else -> PhotoQuality.LOW  // 无后缀默认 L
                 }
                 val label = PhotoQuality.labelFor(quality)
-                val source = if (isFront) "front" else "command"
                 if (isFront) {
                     TelegramBot.sendText(token, chatId, "🤳 前镜头拍照中... [$label]")
                     captureFrontCamera(chatId = chatId, quality = quality)
                 } else {
                     TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
-                    captureAndSend(source = "command", chatId = chatId, quality = quality)
+                    captureAndSend(source = "TEL", chatId = chatId, quality = quality)
                 }
             }
             text == "/status" -> {
@@ -409,13 +414,15 @@ class LightBotService : LifecycleService() {
     // ── CameraX Capture ────────────────────────────────────────────────────────
 
     private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.HIGH) {
-        // Map capture source to output quality:
-        //   interval → MEDIUM (定时拍照，节省流量)
-        //   ui       → LOW    (App内拍照，低分辨率)
-        //   command  → uses the quality arg passed in (h/m/l, default HIGH)
+        // Map capture source to default output quality:
+        //   interval → MEDIUM (定时，节省流量)
+        //   ui       → LOW    (App内拍照)
+        //   TEL      → LOW    (默认 L，用户可手动指定 h/m/l/x)
+        //   front    → uses the quality arg
         val outputQuality = when (source) {
             "interval" -> PhotoQuality.MEDIUM
-            "ui"      -> PhotoQuality.LOW
+            "ui"       -> PhotoQuality.LOW
+            "TEL"      -> PhotoQuality.LOW
             else       -> quality
         }
         if (capturing) {
@@ -432,6 +439,7 @@ class LightBotService : LifecycleService() {
             captureWithWait(source, chatId, outputQuality)
         }
     }
+    // ── CameraX Capture ────────────────────────────────────────────────────────
 
     private fun captureWithWait(source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         if (cameraProvider == null || imageCapture == null) {
@@ -527,6 +535,12 @@ class LightBotService : LifecycleService() {
         }
 
         mainHandler.post {
+            // Re-check capturing after entering handler (avoid race with other capture)
+            if (capturing) {
+                TelegramBot.sendText(Config.botToken, chatId, "⚠️ 相机正忙，请稍后重试")
+                return@post
+            }
+            capturing = true
             try {
                 val imgCapture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
@@ -542,12 +556,14 @@ class LightBotService : LifecycleService() {
                 )
 
                 captureWithImageCapture(imgCapture, "front", chatId, quality) {
+                    capturing = false
                     // Restore back camera after capture
                     mainHandler.postDelayed({
                         bindImageCapture()
                     }, 500)
                 }
             } catch (e: Exception) {
+                capturing = false
                 Log.e(TAG, "Front camera capture failed", e)
                 TelegramBot.sendText(Config.botToken, chatId, "❌ 前镜头拍照失败：${e.javaClass.simpleName}")
                 bindImageCapture()
@@ -638,7 +654,21 @@ class LightBotService : LifecycleService() {
 
     // CameraX setTargetResolution is only a hint — the camera may output a larger native
     // resolution. Always resize to fit within target dimensions.
+    // X (RAW): strip EXIF orientation and return raw bytes (no resize, no recompress).
     private fun resizeJpeg(jpegData: ByteArray, quality: String): ByteArray {
+        // RAW / X: decode + re-encode once to strip EXIF, no resize
+        if (quality == PhotoQuality.RAW) {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
+            opts.inJustDecodeBounds = false
+            val bitmap = BitmapFactory.decodeByteArray(jpegData, 0, jpegData.size, opts)
+                ?: return jpegData
+            val out = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            bitmap.recycle()
+            return out.toByteArray()
+        }
+
         val maxW: Int
         val maxH: Int
         val targetJpegQ = PhotoQuality.jpegQualityFor(quality)
@@ -751,10 +781,11 @@ class LightBotService : LifecycleService() {
                 val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 val battery = getBatteryLevel()
                 val sourceLabel = when (source) {
-                    "interval" -> "③ 定时"
-                    "manual" -> "② APP"
-                    "telegram" -> "④ TEL"
-                    else -> source
+                    "interval" -> "定时"
+                    "ui"       -> "APP"
+                    "TEL"      -> "TEL"
+                    "front"    -> "前镜头"
+                    else       -> source
                 }
                 val msg = buildString {
                     append("\u23f0 $now\n")
@@ -792,7 +823,7 @@ class LightBotService : LifecycleService() {
             append("\uD83D\uDCCB \u6307\u4ee4\u5217\u8868\uff1a\n")
             append("/start \u2014 \u542f\u52a8\u76d1\u63a7\n")
             append("/stop \u2014 \u505c\u6b62\u76d1\u63a7\n")
-            append("/photo \u2014 \u62cd\u7167\uff08f|r\uff09\n")
+            append("/photo \u2014 \u62cd\u7167\uff08f|h|m|l|x\uff09\n")
             append("/interval \u2014 \u95f4\u9694\uff08\u5206\u949f\uff09\n")
             append("/battery \u2014 \u7535\u6c60\u4f18\u5316\u8bbe\u7f6e\n")
             append("/debug on|off \u2014 \u8c03\u8bd5\u6a21\u5f0f")
