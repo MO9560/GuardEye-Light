@@ -362,14 +362,15 @@ class LightBotService : LifecycleService() {
                 val raw = text.removePrefix("/photo").trim().lowercase()
                 val isFront = raw.startsWith("f ") || raw.startsWith("f")
                 val qualityRaw = if (isFront) raw.removePrefix("f").trim() else raw
+                // "" = no suffix given (use source default); "h"/"m"/"l"/"x" = explicit
                 val quality = when (qualityRaw) {
                     "h" -> PhotoQuality.HIGH
                     "m" -> PhotoQuality.MEDIUM
                     "l" -> PhotoQuality.LOW
                     "x" -> PhotoQuality.RAW
-                    else -> PhotoQuality.LOW  // 无后缀默认 L
+                    else -> ""  // no suffix → source default
                 }
-                val label = PhotoQuality.labelFor(quality)
+                val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "L"
                 if (isFront) {
                     TelegramBot.sendText(token, chatId, "🤳 前镜头拍照中... [$label]")
                     captureFrontCamera(chatId = chatId, quality = quality)
@@ -414,16 +415,17 @@ class LightBotService : LifecycleService() {
     // ── CameraX Capture ────────────────────────────────────────────────────────
 
     private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.HIGH) {
-        // Map capture source to default output quality:
-        //   interval → MEDIUM (定时，节省流量)
-        //   ui       → LOW    (App内拍照)
-        //   TEL      → LOW    (默认 L，用户可手动指定 h/m/l/x)
-        //   front    → uses the quality arg
-        val outputQuality = when (source) {
-            "interval" -> PhotoQuality.MEDIUM
-            "ui"       -> PhotoQuality.LOW
-            "TEL"      -> PhotoQuality.LOW
-            else       -> quality
+        // Source-default quality when no explicit suffix is given.
+        // quality="" means no suffix → use source default.
+        // Any non-empty value (h/m/l/x) is an explicit user choice that wins.
+        val outputQuality = if (quality.isNotEmpty()) {
+            quality
+        } else {
+            when (source) {
+                "interval" -> PhotoQuality.MEDIUM
+                "ui"       -> PhotoQuality.LOW
+                else       -> PhotoQuality.LOW
+            }
         }
         if (capturing) {
             if (source == "command" && chatId != null) {
