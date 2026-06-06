@@ -643,7 +643,7 @@ class LightBotService : LifecycleService() {
                         image.close()
                         try {
                             TelegramBot.sendPhoto(Config.botToken, chatId, data,
-                                "📷 [${(System.currentTimeMillis() - previewEndTime + 30000) / 1000}s]")
+                                "[预览帧 ${((System.currentTimeMillis() - previewEndTime + 30000) / 1000).toInt()}s]")
                         } catch (_: Exception) {}
                         // Restore back camera after front capture
                         mainHandler.post {
