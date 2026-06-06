@@ -472,8 +472,13 @@ class LightBotService : LifecycleService() {
     }
 
     private fun captureWithImageCapture(imgCapture: ImageCapture, source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
-        // CameraLifecycleOwner.start() must run on main thread (LifecycleRegistry requirement)
-        mainHandler.post { cameraLifecycleOwner.start() }
+        // CameraLifecycleOwner.start() must run on main thread; use CountDownLatch to wait for it to complete
+        val latch = java.util.concurrent.CountDownLatch(1)
+        mainHandler.post {
+            cameraLifecycleOwner.start()
+            latch.countDown()
+        }
+        try { latch.await(2, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
         capturing = true
 
         // 15-second timeout guard — capture chatId locally to avoid closure capture of nullable var
