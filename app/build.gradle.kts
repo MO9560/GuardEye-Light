@@ -15,7 +15,8 @@ android {
         targetSdk = 34
         versionCode = providers.exec { commandLine("git", "rev-list", "HEAD", "--count") }
             .standardOutput.asText.get().trim().toInt()
-        versionName = "3.0.1"
+        versionName = "3.1." + providers.exec { commandLine("git", "rev-list", "HEAD", "--count") }
+            .standardOutput.asText.get().trim()
     }
 
     signingConfigs {
