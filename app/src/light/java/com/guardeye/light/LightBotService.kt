@@ -106,6 +106,8 @@ class LightBotService : LifecycleService() {
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var capturing = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val cameraThread = HandlerThread("CameraThread").apply { start() }
+    private val cameraHandler = Handler(cameraThread.looper)
     private var captureTimeoutRunnable: Runnable? = null
     private var cameraReady = false
 
@@ -241,6 +243,7 @@ class LightBotService : LifecycleService() {
         cmdScope.cancel()
         captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         cameraExecutor.shutdown()
+        cameraThread.quitSafely()
         cameraProvider?.shutdown()
         cameraLifecycleOwner.stop()
         if (wakeLock.isHeld) {
@@ -432,7 +435,7 @@ class LightBotService : LifecycleService() {
             }
             return
         }
-        mainHandler.post {
+        cameraHandler.post {
             if (!cameraReady) {
                 Log.d(TAG, "Camera not ready — forcing init from capture path")
                 initCameraProvider()
@@ -449,7 +452,7 @@ class LightBotService : LifecycleService() {
             return
         }
         // Re-fetch imageCapture fresh after any front-camera op settles (500ms grace).
-        mainHandler.postDelayed({
+        cameraHandler.postDelayed({
             captureWithImageCapture(imageCapture!!, source, chatId, quality)
             onDone?.invoke()
         }, 500L)
@@ -538,7 +541,7 @@ class LightBotService : LifecycleService() {
             return
         }
 
-        mainHandler.post {
+        cameraHandler.post {
             // Re-check capturing after entering handler (avoid race with other capture)
             if (capturing) {
                 TelegramBot.sendText(Config.botToken, chatId, "[相机正忙，请稍后重试]")
@@ -612,7 +615,7 @@ class LightBotService : LifecycleService() {
                 Log.e(TAG, "Preview error", e)
             } finally {
                 isFrontPreview = false
-                mainHandler.post { bindImageCapture() }
+                cameraHandler.post { bindImageCapture() }
             }
         }
     }
@@ -645,7 +648,7 @@ class LightBotService : LifecycleService() {
                                 "[预览帧 ${((System.currentTimeMillis() - previewEndTime + 30000) / 1000).toInt()}s]")
                         } catch (_: Exception) {}
                         // Restore back camera after front capture
-                        mainHandler.post {
+                        cameraHandler.post {
                             try { cameraProvider?.unbindAll() } catch (_: Exception) {}
                             bindImageCapture()
                         }
