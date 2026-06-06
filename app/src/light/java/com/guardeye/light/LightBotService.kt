@@ -370,7 +370,7 @@ class LightBotService : LifecycleService() {
                     "x" -> PhotoQuality.RAW
                     else -> ""  // no suffix → source default
                 }
-                val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "1920×1080"
+                val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "854×480"
                 if (isFront) {
                     TelegramBot.sendText(token, chatId, "[前镜头拍照中... $label]")
                     captureFrontCamera(chatId = chatId, quality = if (quality.isNotEmpty()) quality else PhotoQuality.LOW)
