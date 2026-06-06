@@ -472,7 +472,8 @@ class LightBotService : LifecycleService() {
     }
 
     private fun captureWithImageCapture(imgCapture: ImageCapture, source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
-        cameraLifecycleOwner.start()
+        // CameraLifecycleOwner.start() must run on main thread (LifecycleRegistry requirement)
+        mainHandler.post { cameraLifecycleOwner.start() }
         capturing = true
 
         // 15-second timeout guard — capture chatId locally to avoid closure capture of nullable var
@@ -646,7 +647,8 @@ class LightBotService : LifecycleService() {
             provider.unbindAll()
             provider.bindToLifecycle(cameraLifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, imgCapture)
 
-            cameraLifecycleOwner.start()
+            // Must be on main thread (LifecycleRegistry requirement)
+            mainHandler.post { cameraLifecycleOwner.start() }
 
             imgCapture.takePicture(
                 cameraExecutor,
