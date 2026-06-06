@@ -178,6 +178,7 @@ class LightMainActivity : AppCompatActivity() {
     private fun saveConfig() {
         Config.botToken = ui.inputToken.text.toString().trim()
         Config.chatId = ui.inputChatId.text.toString().trim()
+        Config.intervalMinutes = ui.sliderInterval.value.toInt()
         Config.debugMode = ui.switchDebug.isChecked
     }
 
