@@ -33,8 +33,8 @@ object Config {
         set(v) = prefs.edit().putString(KEY_CHAT_ID, v).apply()
 
     var intervalMinutes: Int
-        get() = prefs.getInt(KEY_INTERVAL, 5).coerceIn(1, 10)
-        set(v) = prefs.edit().putInt(KEY_INTERVAL, v.coerceIn(1, 10)).apply()
+        get() = prefs.getInt(KEY_INTERVAL, 5).coerceIn(1, 60)
+        set(v) = prefs.edit().putInt(KEY_INTERVAL, v.coerceIn(1, 60)).apply()
 
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)

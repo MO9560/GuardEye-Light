@@ -27,7 +27,6 @@ object TelegramBot {
             val body = JSONObject()
                 .put("chat_id", chatId)
                 .put("text", text)
-                .put("parse_mode", "Markdown")
                 .toString()
                 .toRequestBody(JSON)
                 .let { api("sendMessage", token, it) }
@@ -53,7 +52,6 @@ object TelegramBot {
                     photoBytes.toRequestBody("image/jpeg".toMediaType())
                 )
                 .addFormDataPart("chat_id", chatId)
-                .addFormDataPart("parse_mode", "Markdown")
                 .apply { caption?.let { addFormDataPart("caption", it) } }
                 .build()
 

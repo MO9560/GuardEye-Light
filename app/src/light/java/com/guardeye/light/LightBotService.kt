@@ -342,6 +342,7 @@ class LightBotService : LifecycleService() {
         when {
             text == "/start" -> {
                 Config.enabled = true
+                startForegroundService(Intent(this, LightBotService::class.java))
                 LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
                 TelegramBot.sendText(token, chatId,
                     "✅ GuardEye Light 已启动\n" +
@@ -370,10 +371,10 @@ class LightBotService : LifecycleService() {
                     "x" -> PhotoQuality.RAW
                     else -> ""  // no suffix → source default
                 }
-                val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "L"
+                val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "1920×1080"
                 if (isFront) {
                     TelegramBot.sendText(token, chatId, "🤳 前镜头拍照中... [$label]")
-                    captureFrontCamera(chatId = chatId, quality = quality)
+                    captureFrontCamera(chatId = chatId, quality = if (quality.isNotEmpty()) quality else PhotoQuality.HIGH)
                 } else {
                     TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
                     captureAndSend(source = "TEL", chatId = chatId, quality = quality)
@@ -394,7 +395,10 @@ class LightBotService : LifecycleService() {
                 val mins = text.removePrefix("/interval ").trim().toIntOrNull()
                 if (mins != null && mins in 1..60) {
                     Config.intervalMinutes = mins
-                    if (Config.enabled) LightAlarmReceiver.scheduleAlarm(this, mins)
+                    if (Config.enabled) {
+                        startForegroundService(Intent(this, LightBotService::class.java))
+                        LightAlarmReceiver.scheduleAlarm(this, mins)
+                    }
                     TelegramBot.sendText(token, chatId, "⏱ 间隔已设为 $mins 分钟")
                 } else {
                     TelegramBot.sendText(token, chatId, "用法：/interval 1-60")
@@ -403,6 +407,7 @@ class LightBotService : LifecycleService() {
             text.startsWith("/debug") -> {
                 val mode = text.removePrefix("/debug").trim().lowercase()
                 Config.debugMode = (mode.isEmpty() || mode == "on")
+                if (Config.enabled) startForegroundService(Intent(this, LightBotService::class.java))
                 TelegramBot.sendText(token, chatId,
                     if (Config.debugMode) "🐛 调试模式开启" else "🐛 调试模式关闭")
             }
@@ -460,13 +465,14 @@ class LightBotService : LifecycleService() {
         cameraLifecycleOwner.start()
         capturing = true
 
-        // 15-second timeout guard
+        // 15-second timeout guard — capture chatId locally to avoid closure capture of nullable var
+        val chatIdVal = chatId
         val timeoutRunnable = Runnable {
             Log.e(TAG, "Capture timeout — no callback in 15s (source=$source)")
             synchronized(this@LightBotService) { captureTimeoutRunnable = null }
             capturing = false
-            if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "\u274c \u62cd\u7167\u8d85\u65f6\uff0815\u79d2\u65e0\u54cd\u5e94\uff09\uff0c\u8bf7\u68c0\u67e5\u76f8\u673a\u662f\u5426\u88ab\u5176\u4ed6\u5e94\u7528\u5360\u7528")
+            if (chatIdVal != null && Config.botToken.isNotBlank()) {
+                TelegramBot.sendText(Config.botToken, chatIdVal, "❌ 拍照超时（15秒无响应），请检查相机是否被其他应用占用")
             }
         }
         captureTimeoutRunnable = timeoutRunnable
@@ -499,14 +505,15 @@ class LightBotService : LifecycleService() {
                         }
                         Log.e(TAG, "CameraX capture error: ${exception.imageCaptureError}", exception)
                         capturing = false
-                        if (chatId != null) {
+                        val cId = chatId
+                        if (cId != null && Config.botToken.isNotBlank()) {
                             val msg = when (exception.imageCaptureError) {
-                                ImageCapture.ERROR_CAMERA_CLOSED -> "\u274c \u76f8\u673a\u88ab\u5173\u95ed\uff0c\u8bf7\u91cd\u8bd5"
-                                ImageCapture.ERROR_FILE_IO       -> "\u274c \u5199\u5165\u7167\u7247\u5931\u6548\uff08\u5b58\u50a8\u7a7a\u95f4\uff09"
-                                ImageCapture.ERROR_UNKNOWN       -> "\u274c \u62cd\u7167\u5931\u6548\uff1a${exception.message}"
-                                else                             -> "\u274c \u62cd\u7167\u5931\u6548\uff08${exception.imageCaptureError}\uff09\uff1a${exception.message}"
+                                ImageCapture.ERROR_CAMERA_CLOSED -> "❌ 相机被关闭，请重试"
+                                ImageCapture.ERROR_FILE_IO       -> "❌ 写入照片失效（存储空间不足）"
+                                ImageCapture.ERROR_UNKNOWN       -> "❌ 拍照失败：${exception.message}"
+                                else                             -> "❌ 拍照失败（${exception.imageCaptureError}）：${exception.message}"
                             }
-                            TelegramBot.sendText(Config.botToken, chatId, msg)
+                            TelegramBot.sendText(Config.botToken, cId, msg)
                         }
                         onDone?.invoke()
                     }
@@ -516,8 +523,9 @@ class LightBotService : LifecycleService() {
             synchronized(this) { captureTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }; captureTimeoutRunnable = null }
             Log.e(TAG, "takePicture threw: ${e.javaClass.simpleName}", e)
             capturing = false
-            if (chatId != null) {
-                TelegramBot.sendText(Config.botToken, chatId, "\u274c \u62cd\u7167\u5931\u6548\uff1a${e.javaClass.simpleName}")
+            val cId2 = chatId
+            if (cId2 != null && Config.botToken.isNotBlank()) {
+                TelegramBot.sendText(Config.botToken, cId2, "❌ 拍照失败：${e.javaClass.simpleName}")
             }
             onDone?.invoke()
         }
@@ -543,11 +551,24 @@ class LightBotService : LifecycleService() {
                 return@post
             }
             capturing = true
+            // Resolve target resolution based on quality parameter
+            val targetW = when (quality.lowercase()) {
+                PhotoQuality.MEDIUM -> PhotoQuality.MEDIUM_W
+                PhotoQuality.LOW    -> PhotoQuality.LOW_W
+                else               -> PhotoQuality.HIGH_W
+            }
+            val targetH = when (quality.lowercase()) {
+                PhotoQuality.MEDIUM -> PhotoQuality.MEDIUM_H
+                PhotoQuality.LOW     -> PhotoQuality.LOW_H
+                else                -> PhotoQuality.HIGH_H
+            }
+            val jpegQ = PhotoQuality.jpegQualityFor(quality)
+
             try {
                 val imgCapture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .setTargetResolution(Size(PhotoQuality.HIGH_W, PhotoQuality.HIGH_H))
-                    .setJpegQuality(95)
+                    .setTargetResolution(Size(targetW, targetH))
+                    .setJpegQuality(jpegQ)
                     .build()
 
                 provider.unbindAll()
