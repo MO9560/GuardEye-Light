@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
