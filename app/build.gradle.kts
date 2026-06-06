@@ -13,7 +13,8 @@ android {
         applicationId = "com.guardeye"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
+        versionCode = providers.exec { commandLine("git", "rev-list", "HEAD", "--count") }
+            .standardOutput.asText.get().trim().toInt()
         versionName = "3.0.1"
     }
 
