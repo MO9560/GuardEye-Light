@@ -345,18 +345,17 @@ class LightBotService : LifecycleService() {
                 startForegroundService(Intent(this, LightBotService::class.java))
                 LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
                 TelegramBot.sendText(token, chatId,
-                    "✅ GuardEye Light 已启动\n" +
-                    "⏱ 间隔：${Config.intervalMinutes}分钟\n" +
-                    "🔋 提示：建议关闭电池优化以提高稳定性\n" +
-                    "   App内发送 /battery 可一键设置")
+                    "[GuardEye Light 已启动]\n" +
+                    "间隔：${Config.intervalMinutes}分钟\n" +
+                    "提示：建议关闭电池优化以提高稳定性")
             }
             text == "/stop" -> {
                 Config.enabled = false
                 LightAlarmReceiver.cancelAlarm(this)
-                TelegramBot.sendText(token, chatId, "⏸ 已停止")
+                TelegramBot.sendText(token, chatId, "[已停止监控]")
             }
             text.startsWith("/preview") -> {
-                TelegramBot.sendText(token, chatId, "📷 开启前镜头预览，30秒后自动关闭")
+                TelegramBot.sendText(token, chatId, "[开启前镜头预览，30秒后自动关闭]")
                 startFrontPreview(chatId = chatId)
             }
             text.startsWith("/photo") -> {
@@ -373,10 +372,10 @@ class LightBotService : LifecycleService() {
                 }
                 val label = if (quality.isNotEmpty()) PhotoQuality.labelFor(quality) else "1920×1080"
                 if (isFront) {
-                    TelegramBot.sendText(token, chatId, "🤳 前镜头拍照中... [$label]")
+                    TelegramBot.sendText(token, chatId, "[前镜头拍照中... $label]")
                     captureFrontCamera(chatId = chatId, quality = if (quality.isNotEmpty()) quality else PhotoQuality.HIGH)
                 } else {
-                    TelegramBot.sendText(token, chatId, "📸 正在拍照... [$label]")
+                    TelegramBot.sendText(token, chatId, "[正在拍照... $label]")
                     captureAndSend(source = "TEL", chatId = chatId, quality = quality)
                 }
             }
@@ -385,7 +384,7 @@ class LightBotService : LifecycleService() {
             }
             text == "/battery" -> {
                 TelegramBot.sendText(token, chatId,
-                    "🔋 正在打开电池优化设置...\n请选择「不限」或「不优化」以确保后台稳定运行")
+                    "[正在打开电池优化设置]\n请选择「不限」或「不优化」以确保后台稳定运行")
                 val i = Intent(this, LightBotService::class.java).apply {
                     action = ACTION_REQUEST_BATTERY
                 }
@@ -399,7 +398,7 @@ class LightBotService : LifecycleService() {
                         startForegroundService(Intent(this, LightBotService::class.java))
                         LightAlarmReceiver.scheduleAlarm(this, mins)
                     }
-                    TelegramBot.sendText(token, chatId, "⏱ 间隔已设为 $mins 分钟")
+                    TelegramBot.sendText(token, chatId, "[间隔已设为 $mins 分钟]")
                 } else {
                     TelegramBot.sendText(token, chatId, "用法：/interval 1-60")
                 }
@@ -409,10 +408,10 @@ class LightBotService : LifecycleService() {
                 Config.debugMode = (mode.isEmpty() || mode == "on")
                 if (Config.enabled) startForegroundService(Intent(this, LightBotService::class.java))
                 TelegramBot.sendText(token, chatId,
-                    if (Config.debugMode) "🐛 调试模式开启" else "🐛 调试模式关闭")
+                    if (Config.debugMode) "[调试模式开启]" else "[调试模式关闭]")
             }
             text == "/test" -> {
-                TelegramBot.sendText(token, chatId, "✅ GuardEye Light 正常运行\n版本：${BuildConfig.VERSION_NAME}")
+                TelegramBot.sendText(token, chatId, "[GuardEye Light 正常运行] 版本：${BuildConfig.VERSION_NAME}")
             }
         }
     }
@@ -421,16 +420,12 @@ class LightBotService : LifecycleService() {
 
     private fun captureAndSend(source: String, chatId: String?, quality: String = PhotoQuality.HIGH) {
         // Source-default quality when no explicit suffix is given.
-        // quality="" means no suffix → use source default.
+        // quality="" means no suffix → use source default (all = LOW).
         // Any non-empty value (h/m/l/x) is an explicit user choice that wins.
         val outputQuality = if (quality.isNotEmpty()) {
             quality
         } else {
-            when (source) {
-                "interval" -> PhotoQuality.MEDIUM
-                "ui"       -> PhotoQuality.LOW
-                else       -> PhotoQuality.LOW
-            }
+            PhotoQuality.LOW  // all sources default to LOW
         }
         if (capturing) {
             if (source == "command" && chatId != null) {
@@ -807,18 +802,17 @@ class LightBotService : LifecycleService() {
                 val sourceLabel = when (source) {
                     "interval" -> "定时"
                     "ui"       -> "APP"
-                    "TEL"      -> "TEL"
+                    "TEL"      -> "远控"
                     "front"    -> "前镜头"
                     else       -> source
                 }
-                val tempStr = if (temp > 0) "$temp\u2103" else "-"
+                val tempStr = if (temp > 0) "$temp℃" else "-"
                 val msg = buildString {
-                    append("\u23f0 $now\n")
-                    append("\uD83D\uDEA6 \u95f4\u9694\uff1a${Config.intervalMinutes} \u5206\u949f\n")
-                    append("\uD83D\uDD0B \u7535\u91cf\uff1a$battery%   \uD83C\uDF21\ufe0f $tempStr\n")
-                    append("\uD83D\uDCCD \u6765\u6e90\uff1a$sourceLabel ($resStr)\n")
+                    append("$now\n")
+                    append("间隔：${Config.intervalMinutes}分钟  电量：$battery%  $tempStr\n")
+                    append("来源：$sourceLabel ($resStr)\n")
                     append("\u2500".repeat(14) + "\n")
-                    append("\uD83D\uDCCB /photo \uD83D\uDCCB /status")
+                    append("[ /photo ] [ /status ]")
                 }
 
                 if (Config.debugMode) {
@@ -838,20 +832,20 @@ class LightBotService : LifecycleService() {
         val interval = Config.intervalMinutes
         val enabled = Config.enabled
         val mode = Config.debugMode
+        val tempStr = if (temp > 0) "$temp℃" else "-"
         return buildString {
-            append("\u7248\u672c\uff1a${BuildConfig.VERSION_NAME}\n")
+            append("版本：${BuildConfig.VERSION_NAME}\n")
             append("\u2500".repeat(15) + "\n")
-            append("\u72b6\u6001\uff1a${if (enabled) "\u2705 \u76d1\u63a7\u4e2d" else "\u23f8 \u5df2\u505c\u6b62"}\n")
-            append("\u8c03\u8bd5\uff1a${if (mode) "\u2705 \u5f00\u542f" else "\u274c \u5173\u95ed"}\n")
-            append("\u95f4\u9694\uff1a$interval \u5206\u949f\n")
-            append("\u7535\u91cf\uff1a$battery%\n")
-            append("\u706b\u70ac\u6e29\u5ea6\uff1a${if (temp > 0) "${temp}℃" else "-"}\n")
+            append("状态：${if (enabled) "监控中" else "已停止"}\n")
+            append("调试：${if (mode) "开启" else "关闭"}\n")
+            append("间隔：$interval 分钟\n")
+            append("电量：$battery%  $tempStr\n")
             append("\u2500".repeat(15) + "\n")
-            append("\uD83D\uDCCB \u6307\u4ee4\u5217\u8868\uff1a\n")
-            append("/start \u2014 \u542f\u52a8\u76d1\u63a7\n")
-            append("/stop \u2014 \u505c\u6b62\u76d1\u63a7\n")
-            append("/photo \u2014 \u62cd\u7167\n")
-            append("/interval \u2014 \u95f4\u9694\uff08\u5206\u949f\uff09")
+            append("命令列表：\n")
+            append("/start \u2014 启动监控\n")
+            append("/stop \u2014 停止监控\n")
+            append("/photo \u2014 拍照\n")
+            append("/interval \u2014 间隔（分钟）")
         }
     }
 
@@ -889,7 +883,7 @@ class LightBotService : LifecycleService() {
 
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setContentTitle("📸 GuardEye Light — 监控中")
+        .setContentTitle("[GuardEye Light] 监控中")
         .setContentText(if (Config.enabled) "定时拍照 · ${Config.intervalMinutes}分钟/次" else "已停止")
         .setCategory(NotificationCompat.CATEGORY_SERVICE)
         .setOngoing(true)
