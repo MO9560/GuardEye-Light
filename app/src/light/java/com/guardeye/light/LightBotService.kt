@@ -579,7 +579,7 @@ class LightBotService : LifecycleService() {
                 captureWithImageCapture(imgCapture, "front", chatId, quality) {
                     capturing = false
                     // Restore back camera after capture
-                    mainHandler.postDelayed({
+                    cameraHandler.postDelayed({
                         bindImageCapture()
                     }, 500)
                 }
