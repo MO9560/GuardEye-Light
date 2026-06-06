@@ -448,8 +448,10 @@ class LightBotService : LifecycleService() {
 
     private fun captureWithWait(source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         if (cameraProvider == null || imageCapture == null) {
-            Log.e(TAG, "cameraProvider or imageCapture null — cannot capture")
-            if (chatId != null) TelegramBot.sendText(Config.botToken, chatId, "[相机初始化失败，请稍后重试]")
+            Log.w(TAG, "Camera not ready — trigger init and wait")
+            // Re-trigger async init; the listener will call bindImageCapture() which sets imageCapture.
+            // Post a delayed retry so we don't spin tight-loop if init fails.
+            cameraHandler.postDelayed({ captureWithWait(source, chatId, quality, onDone) }, 1000)
             return
         }
         // Re-fetch imageCapture fresh after any front-camera op settles (500ms grace).
