@@ -51,7 +51,7 @@ object PhotoQuality {
     fun sourceDefault(): String = LOW
 }
 
-// ── Photo sources ────────────────────────────────────────────────────────────
+// ── Source labels ────────────────────────────────────────────────────────────
 private fun sourceLabelOf(source: String): String = when (source) {
     "interval" -> "定时"
     "ui"       -> "APP"
@@ -61,17 +61,16 @@ private fun sourceLabelOf(source: String): String = when (source) {
 }
 
 // ── LightBotService ──────────────────────────────────────────────────────────
-
 class LightBotService : LifecycleService() {
 
-    // ── Camera service reference (singleton) ─────────────────────────────────
-    // CameraForegroundService registers itself as instance in onCreate;
-    // LightBotService accesses it directly after starting the service.
+    // ── Camera service reference ──────────────────────────────────────────
+    // MUST be accessed AFTER instance creation (after onCreate).
     private val cameraSvc: CameraForegroundService?
         get() = CameraForegroundService.instance
-    // ── Coroutine scopes ─────────────────────────────────────────────────
+
+    // ── Coroutine scopes — separate to isolate failure domains ──────────────
     private val cmdScope    = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val uploadScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val captureScope = CoroutineScope(newSingleThreadContext("CaptureScope") + SupervisorJob())
 
     // ── Telegram polling ─────────────────────────────────────────────────
     private var pollingJob: Job? = null
@@ -85,10 +84,12 @@ class LightBotService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         Config.init(this)
+        ServiceStatus.setBotPolling(false)
         createNotificationChannel()
         startForeground(NOTIF_ID, buildNotification())
         bindCameraService()
         startPolling()
+        ServiceStatus.setMonitoring(Config.enabled, Config.intervalMinutes)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -101,6 +102,9 @@ class LightBotService : LifecycleService() {
                 triggerCapture(source = source)
             }
             ACTION_STOP -> {
+                Config.enabled = false
+                LightAlarmReceiver.cancelAlarm(this)
+                stopCameraService()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -116,19 +120,24 @@ class LightBotService : LifecycleService() {
     override fun onDestroy() {
         stopPolling()
         cmdScope.cancel()
-        uploadScope.cancel()
+        captureScope.cancel()
+        stopCameraService()
         super.onDestroy()
     }
 
-    // ── Bind camera service ───────────────────────────────────────────────
+    // ── Bind / unbind camera service ──────────────────────────────────────
 
     private fun bindCameraService() {
-        // CameraForegroundService.instance is set in its onCreate.
-        // If not yet created, start the service so it initializes.
         if (cameraSvc == null) {
             val intent = Intent(this, CameraForegroundService::class.java)
             startForegroundService(intent)
+            Log.d(TAG, "bindCameraService: started CameraForegroundService")
         }
+    }
+
+    private fun stopCameraService() {
+        stopService(Intent(this, CameraForegroundService::class.java))
+        Log.d(TAG, "stopCameraService: stopped CameraForegroundService")
     }
 
     // ── Notification ─────────────────────────────────────────────────────
@@ -174,6 +183,7 @@ class LightBotService : LifecycleService() {
                     result.getOrNull()?.let { updates ->
                         for (update in updates) {
                             Config.botOffset = update.updateId + 1
+                            ServiceStatus.recordCommand()
                             cmdScope.launch(Dispatchers.IO) {
                                 handleCommand(update.text, update.chatId)
                             }
@@ -192,6 +202,7 @@ class LightBotService : LifecycleService() {
     private fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
+        ServiceStatus.setBotPolling(false)
     }
 
     // ── Battery whitelist ────────────────────────────────────────────────
@@ -219,6 +230,7 @@ class LightBotService : LifecycleService() {
         when {
             text == "/start" -> {
                 Config.enabled = true
+                ServiceStatus.setMonitoring(true, Config.intervalMinutes)
                 LightAlarmReceiver.scheduleNextAlarm(this, Config.intervalMinutes)
                 TelegramBot.sendText(token, chatId,
                     "[GuardEye Light 已启动]\n" +
@@ -229,8 +241,18 @@ class LightBotService : LifecycleService() {
 
             text == "/stop" -> {
                 Config.enabled = false
+                ServiceStatus.setMonitoring(false, 0)
                 LightAlarmReceiver.cancelAlarm(this)
+                stopCameraService()
                 TelegramBot.sendText(token, chatId, "[已停止监控]")
+            }
+
+            text == "/status" -> {
+                TelegramBot.sendText(token, chatId, buildStatusText())
+            }
+
+            text == "/status2" -> {
+                TelegramBot.sendText(token, chatId, buildDetailedStatusText())
             }
 
             text.startsWith("/photo") -> {
@@ -248,10 +270,6 @@ class LightBotService : LifecycleService() {
                 }
             }
 
-            text == "/status" -> {
-                TelegramBot.sendText(token, chatId, buildStatusText())
-            }
-
             text == "/battery" -> {
                 TelegramBot.sendText(token, chatId,
                     "[正在打开电池优化设置]\n请选择「不限」或「不优化」以确保后台稳定运行"
@@ -265,6 +283,7 @@ class LightBotService : LifecycleService() {
                 val mins = text.removePrefix("/interval ").trim().toIntOrNull()
                 if (mins != null && mins in 1..60) {
                     Config.intervalMinutes = mins
+                    ServiceStatus.setMonitoring(Config.enabled, mins)
                     if (Config.enabled) LightAlarmReceiver.scheduleNextAlarm(this, mins)
                     TelegramBot.sendText(token, chatId, "[间隔已设为 $mins 分钟]")
                 } else {
@@ -275,7 +294,7 @@ class LightBotService : LifecycleService() {
             text.startsWith("/debug") -> {
                 val mode = text.removePrefix("/debug").trim().lowercase()
                 Config.debugMode = (mode.isEmpty() || mode == "on")
-                if (Config.enabled) startForegroundService(Intent(this, LightBotService::class.java))
+                startForegroundService(Intent(this, LightBotService::class.java))
                 TelegramBot.sendText(token, chatId,
                     if (Config.debugMode) "[调试模式开启]" else "[调试模式关闭]"
                 )
@@ -305,7 +324,10 @@ class LightBotService : LifecycleService() {
         val resolvedQuality = if (quality.isNotEmpty()) quality else PhotoQuality.sourceDefault()
         bindCameraService()
 
-        uploadScope.launch {
+        // Run capture on a dedicated single thread to avoid blocking IO pool.
+        // CountDownLatch.await() in CameraForegroundService would otherwise hold
+        // an IO thread indefinitely while waiting for the camera response.
+        captureScope.launch {
             try {
                 // Wait for camera service + camera init (max 8 s)
                 repeat(16) {
@@ -315,55 +337,59 @@ class LightBotService : LifecycleService() {
                 if (cameraSvc?.isReady() != true) {
                     val reason = if (cameraSvc == null) "服务未启动" else "相机未初始化"
                     Log.e(TAG, "triggerCapture: $reason")
-                    TelegramBot.sendText(Config.botToken, Config.chatId,
-                        "[拍照失败，请稍后重试] ($reason)")
+                    withContext(Dispatchers.Main) {
+                        TelegramBot.sendText(Config.botToken, Config.chatId,
+                            "[拍照失败，请稍后重试] ($reason)")
+                    }
                     return@launch
                 }
 
-                val data = if (isFront) {
+                ServiceStatus.recordCaptureStart()
+
+                val data: ByteArray = if (isFront) {
+                    ServiceStatus.recordFrontCaptureStart()
                     cameraSvc!!.captureFrontPhoto(resolvedQuality)
                 } else {
                     cameraSvc!!.captureBackPhoto(resolvedQuality)
                 }
 
                 if (data.isEmpty()) {
-                    TelegramBot.sendText(Config.botToken, Config.chatId,
-                        "[拍照失败，请稍后重试]")
+                    Log.e(TAG, "triggerCapture: capture returned empty data")
+                    withContext(Dispatchers.Main) {
+                        TelegramBot.sendText(Config.botToken, Config.chatId,
+                            "[拍照失败，请稍后重试]")
+                    }
                     return@launch
                 }
 
-                // Post-process: resize JPEG in memory
-                val finalData = resizeJpeg(data, resolvedQuality)
-
-                // Build caption
-                val now      = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
-                    .format(java.util.Date())
-                val battery  = getBatteryLevel()
-                val temp      = getBatteryTemperature()
-                val tempStr   = if (temp > 0) "${temp}C" else "-"
-                val resLabel  = PhotoQuality.labelFor(resolvedQuality)
-                val srcLabel  = sourceLabelOf(source)
-                val sep       = "-".repeat(14)
-
-                val msg = buildString {
-                    append("$now\n")
-                    append("间隔：${Config.intervalMinutes}分钟  电量：$battery%  $tempStr\n")
-                    append("来源：$srcLabel ($resLabel)\n")
-                    append("$sep\n")
-                    append("[ /photo ] [ /status ]")
+                // Resize if RAW or quality mismatch
+                val finalData = if (resolvedQuality != PhotoQuality.RAW) {
+                    resizeJpeg(data, resolvedQuality)
+                } else {
+                    data
                 }
 
-                TelegramBot.sendPhoto(Config.botToken, Config.chatId, finalData, msg)
+                val dimg = android.graphics.BitmapFactory.Options().run {
+                    inJustDecodeBounds = true
+                    android.graphics.BitmapFactory.decodeByteArray(finalData, 0, finalData.size, this)
+                    "$outWidth×$outHeight"
+                }
+                val caption = "=★= /status  ${sourceLabelOf(source)} $dimg"
+
+                TelegramBot.sendPhoto(Config.botToken, Config.chatId, finalData, caption)
 
             } catch (e: Exception) {
-                Log.e(TAG, "triggerCapture failed", e)
-                TelegramBot.sendText(Config.botToken, Config.chatId,
-                    "[拍照失败：${e.javaClass.simpleName}]")
+                Log.e(TAG, "triggerCapture exception", e)
+                try {
+                    TelegramBot.sendText(Config.botToken, Config.chatId,
+                        "[拍照失败] ${e.message ?: "未知错误"}")
+                } catch (_: Exception) {}
             }
         }
     }
 
-    // ── In-memory JPEG post-processing ─────────────────────────────────
+    // ── JPEG resize ─────────────────────────────────────────────────────
+    // Handles EXIF rotation (wide images = landscape = 270° rotation).
 
     private fun resizeJpeg(jpegData: ByteArray, quality: String): ByteArray {
         if (quality == PhotoQuality.RAW) return jpegData
@@ -388,7 +414,7 @@ class LightBotService : LifecycleService() {
         var bitmap = android.graphics.BitmapFactory.decodeByteArray(
             jpegData, 0, jpegData.size, opts) ?: return jpegData
 
-        // Landscape rotation (横拍需旋转 270 degrees)
+        // Landscape rotation (横拍: width > height → 270°)
         if (srcW > srcH) {
             val matrix = android.graphics.Matrix().apply { postRotate(270f) }
             val rotated = android.graphics.Bitmap.createBitmap(
@@ -455,7 +481,37 @@ class LightBotService : LifecycleService() {
             append("/stop -- 停止监控\n")
             append("/photo -- 拍照（后镜头）\n")
             append("/photo f -- 前镜头拍照\n")
-            append("/interval -- 间隔（分钟）")
+            append("/interval -- 间隔（分钟）\n")
+            append("/status2 -- 详细状态")
+        }
+    }
+
+    /** Detailed machine-readable status using ServiceStatus. */
+    private fun buildDetailedStatusText(): String {
+        val cs = ServiceStatus.cameraStatus
+        val bs = ServiceStatus.botStatus
+        val now = System.currentTimeMillis()
+        val lastCaptureAgo = if (cs.lastCaptureTime > 0)
+            "${(now - cs.lastCaptureTime) / 1000}s ago" else "never"
+        val lastErr = cs.lastErrorMessage.takeIf { it.isNotBlank() }?.let { "⚠ $it" } ?: "none"
+        return buildString {
+            appendLine("═══ GuardEye Light ═══")
+            appendLine("Bot polling : ${if (bs.pollingActive) "ACTIVE" else "inactive"}")
+            appendLine("Monitoring  : ${if (bs.monitoringEnabled) "ON (${bs.intervalMinutes}min)" else "OFF"}")
+            appendLine("Commands    : ${bs.commandCount}")
+            appendLine("────────────────────────────────")
+            appendLine("CamSvc      : ${if (cs.serviceRunning) "running" else "STOPPED"}")
+            appendLine("Lifecycle   : ${cs.lifecycleState}")
+            appendLine("Provider    : ${if (cs.cameraProviderReady) "ready" else "NOT ready"}")
+            appendLine("Back bound  : ${cs.backCameraBound}")
+            appendLine("Front bound : ${cs.frontCameraBound}")
+            appendLine("Front cap   : ${cs.frontCaptureInProgress}")
+            appendLine("WakeLock    : ${if (cs.wakeLockHeld) "HELD" else "free"}")
+            appendLine("────────────────────────────────")
+            appendLine("Captures    : ${cs.captureCount} total")
+            appendLine("Failed      : ${cs.failedCaptureCount}")
+            appendLine("Last OK     : $lastCaptureAgo (${cs.lastCaptureDurationMs}ms)")
+            appendLine("Last error  : $lastErr")
         }
     }
 

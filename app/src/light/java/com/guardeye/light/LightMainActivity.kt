@@ -143,6 +143,9 @@ class LightMainActivity : AppCompatActivity() {
 
         // Bottom tabs
         ui.tabSettings.setOnClickListener { /* already on settings */ }
+        ui.tabStatus.setOnClickListener {
+            startActivity(Intent(this, StatusActivity::class.java))
+        }
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()
