@@ -233,15 +233,30 @@ class CameraForegroundService : LifecycleService() {
      * Capture with the back camera.
      * @return JPEG byte array (quality 70), or empty ByteArray on failure.
      */
+    /**
+     * Capture with the back camera.
+     * Waits up to 5s for camera initialization if not yet ready.
+     * @return JPEG byte array, or empty ByteArray on failure.
+     */
     fun captureBackPhoto(quality: String): ByteArray {
         acquireWakeLock()
-        val ic = backImageCapture
-        if (ic == null || cameraProvider == null) {
-            Log.e(TAG, "captureBackPhoto: not ready")
-            scheduleWakeLockRelease()
-            return ByteArray(0)
+
+        // Wait for async camera init to complete
+        if (!isReady()) {
+            Log.d(TAG, "captureBackPhoto: waiting for camera init...")
+            var waited = 0L
+            while (!isReady() && waited < 5_000) {
+                Thread.sleep(200)
+                waited += 200
+            }
+            if (!isReady()) {
+                Log.e(TAG, "captureBackPhoto: camera not ready after 5s wait")
+                scheduleWakeLockRelease()
+                return ByteArray(0)
+            }
         }
-        // LifecycleService lifecycle is already >= STARTED — capture immediately
+
+        val ic = backImageCapture!!
         return doCapture(ic, PhotoQuality.jpegQualityFor(quality)).also {
             scheduleWakeLockRelease()
         }
@@ -252,11 +267,23 @@ class CameraForegroundService : LifecycleService() {
      * bind(front) → await RESUMED → capture → restore(back) → return.
      * @return JPEG byte array, or empty ByteArray on failure.
      */
+    /**
+     * Capture with the front camera (transactional).
+     * bind(front) → await RESUMED → capture → restore(back) → return.
+     * Waits for camera initialization if needed.
+     */
     fun captureFrontPhoto(quality: String): ByteArray {
         acquireWakeLock()
+
+        // Wait for async camera init
+        var waited = 0L
+        while (cameraProvider == null && waited < 5_000) {
+            Thread.sleep(200)
+            waited += 200
+        }
         val provider = cameraProvider
         if (provider == null) {
-            Log.e(TAG, "captureFrontPhoto: camera not ready")
+            Log.e(TAG, "captureFrontPhoto: camera not ready after 5s wait")
             scheduleWakeLockRelease()
             return ByteArray(0)
         }

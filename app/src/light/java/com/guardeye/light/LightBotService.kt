@@ -307,14 +307,16 @@ class LightBotService : LifecycleService() {
 
         uploadScope.launch {
             try {
-                // Wait for camera service to register (max 5 s)
-                repeat(10) {
-                    if (cameraSvc != null) return@repeat
+                // Wait for camera service + camera init (max 8 s)
+                repeat(16) {
+                    if (cameraSvc?.isReady() == true) return@repeat
                     delay(500)
                 }
-                if (cameraSvc == null) {
+                if (cameraSvc?.isReady() != true) {
+                    val reason = if (cameraSvc == null) "服务未启动" else "相机未初始化"
+                    Log.e(TAG, "triggerCapture: $reason")
                     TelegramBot.sendText(Config.botToken, Config.chatId,
-                        "[相机服务未就绪，请稍后重试]")
+                        "[拍照失败，请稍后重试] ($reason)")
                     return@launch
                 }
 
