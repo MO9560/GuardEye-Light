@@ -115,7 +115,7 @@ class LightMainActivity : AppCompatActivity() {
                 refreshStatus()
             } else {
                 Config.enabled = true
-                LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
+                LightAlarmReceiver.scheduleNextAlarm(this, Config.intervalMinutes)
                 startForegroundService(Intent(this, LightBotService::class.java))
                 refreshStatus()
             }

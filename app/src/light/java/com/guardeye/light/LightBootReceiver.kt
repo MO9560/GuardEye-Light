@@ -16,7 +16,7 @@ class LightBootReceiver : BroadcastReceiver() {
                 val svc = Intent(ctx, LightBotService::class.java)
                 ctx.startForegroundService(svc)
                 if (Config.enabled) {
-                    LightAlarmReceiver.scheduleAlarm(ctx, Config.intervalMinutes)
+                    LightAlarmReceiver.scheduleNextAlarm(ctx, Config.intervalMinutes)
                 }
             }
         }

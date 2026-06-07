@@ -37,12 +37,19 @@
             </intent-filter>
         </activity>
 
-        <!-- Light Bot Service — handles polling + capture in one service -->
+        <!-- Light Bot Service — Telegram polling + command routing -->
         <service
             android:name=".light.LightBotService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Camera Service — pure camera controller; bound by LightBotService -->
+        <service
+            android:name=".light.CameraForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
 
         <!-- Light Alarm Receiver — triggers capture -->
         <receiver

@@ -5,60 +5,71 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.guardeye.Config
-import com.guardeye.light.ACTION_CAPTURE
 
+/**
+ * AlarmReceiver — schedules the next capture and triggers LightBotService.
+ *
+ * Uses AlarmManager.setExactAndAllowWhileIdle for reliable 1-minute interval
+ * triggering even in Doze mode.  The next alarm is scheduled inside onReceive
+ * immediately after triggering the capture, forming a tight loop.
+ */
 class LightAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         Config.init(ctx)
         if (!Config.enabled) return
 
-        Log.d(TAG, "Alarm fired — starting LightBotService capture")
+        Log.d(TAG, "Alarm fired — triggering capture")
+
+        // Start LightBotService to handle capture + upload
         val i = Intent(ctx, LightBotService::class.java).apply {
             action = ACTION_CAPTURE
         }
         ctx.startForegroundService(i)
 
-        // Re-schedule the next alarm immediately so captures repeat
+        // Schedule the next alarm immediately (capture → upload → schedule next)
         val interval = Config.intervalMinutes
-        scheduleAlarm(ctx, interval)
+        scheduleNextAlarm(ctx, interval)
     }
 
     companion object {
         private const val TAG = "LightAlarmReceiver"
+        private const val REQUEST_CODE = 2001
 
-        fun scheduleAlarm(ctx: Context, intervalMinutes: Int) {
+        /**
+         * Schedule the next capture alarm using setExactAndAllowWhileIdle.
+         * Fires reliably even in Doze mode (unless device is in full standby).
+         */
+        fun scheduleNextAlarm(ctx: Context, intervalMinutes: Int) {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(ctx, LightAlarmReceiver::class.java)
             val pi = PendingIntent.getBroadcast(
-                ctx, REQUEST_CODE,
-                intent,
+                ctx, REQUEST_CODE, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val triggerAt = System.currentTimeMillis() + intervalMinutes * 60 * 1000L
+            val triggerAt = SystemClock.elapsedRealtime() + intervalMinutes * 60_000L
 
-            // Use setAlarmClock — highest priority, always fires even in Doze/Deep Sleep
-            val alarmInfo = AlarmManager.AlarmClockInfo(triggerAt, pi)
-            am.setAlarmClock(alarmInfo, pi)
-            Log.d(TAG, "Alarm scheduled (setAlarmClock): in ${intervalMinutes}min")
+            // setExactAndAllowWhileIdle — exact timing, allowed in Doze
+            am.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pi
+            )
+            Log.d(TAG, "Next alarm scheduled in ${intervalMinutes}min")
         }
 
         fun cancelAlarm(ctx: Context) {
-            val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(ctx, LightAlarmReceiver::class.java)
-            val pi = android.app.PendingIntent.getBroadcast(
-                ctx, REQUEST_CODE,
-                intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            val pi = PendingIntent.getBroadcast(
+                ctx, REQUEST_CODE, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             am.cancel(pi)
             Log.d(TAG, "Alarm cancelled")
         }
-
-        private const val REQUEST_CODE = 2001
     }
 }
