@@ -115,7 +115,7 @@ class LightMainActivity : AppCompatActivity() {
                 refreshStatus()
             } else {
                 Config.enabled = true
-                LightAlarmReceiver.scheduleNextAlarm(this, Config.intervalMinutes)
+                LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
                 startForegroundService(Intent(this, LightBotService::class.java))
                 refreshStatus()
             }
@@ -143,9 +143,6 @@ class LightMainActivity : AppCompatActivity() {
 
         // Bottom tabs
         ui.tabSettings.setOnClickListener { /* already on settings */ }
-        ui.tabStatus.setOnClickListener {
-            startActivity(Intent(this, StatusActivity::class.java))
-        }
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()

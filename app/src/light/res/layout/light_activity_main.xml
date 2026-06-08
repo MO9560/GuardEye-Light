@@ -264,28 +264,6 @@
             android:gravity="center_vertical"
             android:paddingVertical="12dp">
 
-            <!-- Status tab -->
-            <LinearLayout
-                android:id="@+id/tabStatus"
-                android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center_horizontal"
-                android:background="?attr/selectableItemBackground"
-                android:paddingVertical="4dp">
-                <ImageView
-                    android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/ic_clock"
-                    app:tint="@color/primary"
-                    android:contentDescription="状态"/>
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="状态"
-                    android:textColor="@color/text_primary"
-                    android:textSize="11sp"
-                    android:layout_marginTop="3dp"/>
-            </LinearLayout>
-
             <!-- Settings tab -->
             <LinearLayout
                 android:id="@+id/tabSettings"

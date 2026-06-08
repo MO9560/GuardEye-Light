@@ -7,8 +7,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- Required for android:foregroundServiceType="camera" on Android 14+ -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -28,12 +26,6 @@
         android:theme="@style/Theme.GuardEye"
         tools:targetApi="34">
 
-        <!-- Status Activity — real-time service dashboard -->
-        <activity
-            android:name=".light.StatusActivity"
-            android:exported="false"
-            android:theme="@style/Theme.GuardEye" />
-
         <!-- Light Activity — simplified UI, no AI toggles -->
         <activity
             android:name=".light.LightMainActivity"
@@ -45,19 +37,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Light Bot Service — Telegram polling + command routing -->
+        <!-- Light Bot Service — handles polling + capture in one service -->
         <service
             android:name=".light.LightBotService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-
-        <!-- Camera Service — pure camera controller; bound by LightBotService -->
-        <service
-            android:name=".light.CameraForegroundService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="camera" />
 
         <!-- Light Alarm Receiver — triggers capture -->
         <receiver
