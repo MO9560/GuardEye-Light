@@ -76,6 +76,12 @@ class CameraForegroundService : LifecycleService() {
         // before any external code sees the instance.
         var instance: CameraForegroundService? = null
             private set
+
+        // Front camera retry constants (v2.0)
+        private const val FRONT_MAX_ATTEMPTS     = 3
+        private const val FRONT_INITIAL_DELAY_MS  = 500L
+        private const val FRONT_MAX_DELAY_MS      = 3000L
+        private const val LIFECYCLE_TIMEOUT_MS    = 15_000L
     }
 
     // ── CameraX ──────────────────────────────────────────────────────────────
@@ -101,12 +107,7 @@ class CameraForegroundService : LifecycleService() {
     private val CHANNEL_ID = "guardeye_camera_svc"
     private val NOTIF_ID   = 2002
 
-    // ── Front camera retry constants (v2.0, class-level so instance methods can reference) ──
-    private const val FRONT_MAX_ATTEMPTS     = 3
-    private const val FRONT_INITIAL_DELAY_MS  = 500L
-    private const val FRONT_MAX_DELAY_MS      = 3000L
-    private const val LIFECYCLE_TIMEOUT_MS    = 15_000L  // Doze can delay lifecycle by several seconds
-
+    // ── Front camera retry constants (v2.0, inside companion object) ──
     /** Exponential backoff: delay = INITIAL_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS */
     private fun frontBackoffDelay(attemptIndex: Int): Long {
         return (FRONT_INITIAL_DELAY_MS * (1L shl (attemptIndex - 1))).coerceAtMost(FRONT_MAX_DELAY_MS)
