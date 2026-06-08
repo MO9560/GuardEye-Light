@@ -4,10 +4,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import com.guardeye.Config
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -99,12 +101,26 @@ class CameraForegroundService : LifecycleService() {
     private val CHANNEL_ID = "guardeye_camera_svc"
     private val NOTIF_ID   = 2002
 
+    // ── Front camera retry constants (v2.0) ────────────────────────────────
+    // Total attempts = FRONT_MAX_ATTEMPTS (index 0, 1, 2 = 3 attempts)
+    private companion object FrontRetry {
+        const val MAX_ATTEMPTS      = 3
+        const val INITIAL_DELAY_MS  = 500L   // attempt 1: 500ms, attempt 2: 1000ms, attempt 3: 2000ms
+        const val MAX_DELAY_MS      = 3000L  // cap
+        const val LIFECYCLE_TIMEOUT = 15_000L // Doze can delay lifecycle by several seconds
+
+        /** Exponential backoff: delay = INITIAL_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS */
+        fun backoffDelay(attemptIndex: Int): Long {
+            // attemptIndex is 1-based: 1 → 500ms, 2 → 1000ms, 3 → 2000ms
+            return (INITIAL_DELAY_MS * (1L shl (attemptIndex - 1))).coerceAtMost(MAX_DELAY_MS)
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
-        // Set instance HERE — onCreate is guaranteed to have run before any caller
-        // sees the instance via CameraForegroundService.instance.
+        Config.init(this)  // needed for onTaskRemoved() to read Config.enabled
         instance = this
         ServiceStatus.updateCameraStatus { copy(serviceRunning = true) }
         createNotificationChannel()
@@ -116,6 +132,22 @@ class CameraForegroundService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // LifecycleService lifecycle is already >= STARTED here.
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "onTaskRemoved — attempting to survive app swipe")
+        // v2.0: Restart the service immediately to survive app swipe from recents.
+        // This is a best-effort measure; some ROMs (MIUI, HarmonyOS) kill the
+        // process directly without calling onTaskRemoved. Those require battery
+        // whitelist (OPT-7) which is handled separately in LightBotService.
+        if (Config.enabled) {
+            val restartIntent = Intent(this, LightBotService::class.java).apply {
+                action = ACTION_CAPTURE
+            }
+            startService(restartIntent)
+            Log.d(TAG, "onTaskRemoved: service restarted to survive app swipe")
+        }
     }
 
     override fun onDestroy() {
@@ -135,7 +167,7 @@ class CameraForegroundService : LifecycleService() {
     // ── Notification ────────────────────────────────────────────────────────
 
     private fun createNotificationChannel() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val ch = NotificationChannel(
                 CHANNEL_ID, "GuardEye Camera", NotificationManager.IMPORTANCE_LOW
             ).apply {
@@ -151,8 +183,8 @@ class CameraForegroundService : LifecycleService() {
         .setContentTitle("GuardEye Camera")
         .setContentText("Camera service active")
         .setCategory(NotificationCompat.CATEGORY_SERVICE)
-        .setOngoing(true)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setOngoing(true)                              // Cannot be swiped away
+        .setPriority(NotificationCompat.PRIORITY_LOW)  // Low disruption but persistent
         .build()
 
     // ── WakeLock ──────────────────────────────────────────────────────────
@@ -210,22 +242,32 @@ class CameraForegroundService : LifecycleService() {
     }
 
     private fun bindBackCamera() {
-        val provider = cameraProvider ?: return
-        provider.unbindAll()
-        backImageCapture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .setTargetResolution(Size(PhotoQuality.LOW_W, PhotoQuality.LOW_H))
-            .setJpegQuality(PhotoQuality.jpegQualityFor(PhotoQuality.LOW))
-            .build()
-        provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, backImageCapture!!)
-        ServiceStatus.setBackCameraBound(true)
+        val provider = cameraProvider ?: run {
+            Log.w(TAG, "bindBackCamera: provider is null")
+            return
+        }
+        try {
+            provider.unbindAll()
+            backImageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetResolution(Size(1920, 1080))
+                .setJpegQuality(95)
+                .build()
+            provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, backImageCapture!!)
+            ServiceStatus.setBackCameraBound(true)
+            Log.d(TAG, "bindBackCamera: OK — back camera bound at 1920x1080")
+        } catch (e: Exception) {
+            Log.e(TAG, "bindBackCamera failed", e)
+            ServiceStatus.setBackCameraBound(false)
+            backImageCapture = null
+        }
     }
 
     // ── Lifecycle await ────────────────────────────────────────────────────
     // Wait for lifecycle to reach RESUMED before calling takePicture().
     // Remove observer on event or timeout to prevent leaks.
 
-    private fun awaitLifecycleResumed(timeoutMs: Long = 2000): Boolean {
+    private fun awaitLifecycleResumed(timeoutMs: Long): Boolean {
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return true
         val latch = CountDownLatch(1)
         val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
@@ -281,8 +323,14 @@ class CameraForegroundService : LifecycleService() {
     }
 
     /**
-     * Blocking front-camera capture (transactional: bind→capture→restore back).
-     * Waits for camera init if needed.
+     * Blocking front-camera capture with retry (v2.0).
+     *
+     * Retry strategy:
+     * - Up to 3 attempts (MAX_ATTEMPTS = 3, indexed 0..2).
+     * - Exponential backoff between attempts: 500ms, 1000ms, 2000ms.
+     * - On each retry, re-checks cameraProvider state.
+     * - Falls back to back camera if all 3 attempts fail.
+     *
      * @param quality Photo quality tier (h/m/l/x)
      * @return JPEG byte array, or empty ByteArray on failure.
      */
@@ -290,6 +338,7 @@ class CameraForegroundService : LifecycleService() {
         acquireWakeLock()
         val startNs = System.nanoTime()
 
+        // Wait for provider (max 5s once at the beginning)
         var waited = 0L
         while (cameraProvider == null && waited < 5_000) {
             Thread.sleep(200)
@@ -303,10 +352,64 @@ class CameraForegroundService : LifecycleService() {
             return ByteArray(0)
         }
 
+        // ── Retry loop: attempt 0, 1, 2 (total 3 attempts) ──
+        for (attempt in 0 until MAX_ATTEMPTS) {
+            // Re-check provider state before each retry attempt.
+            // Provider can become null if the service is destroyed between attempts.
+            if (attempt > 0) {
+                if (cameraProvider == null) {
+                    Log.w(TAG, "captureFrontPhoto: provider gone at retry $attempt — breaking")
+                    break
+                }
+                val delayMs = backoffDelay(attempt)
+                Log.d(TAG, "captureFrontPhoto: retry $attempt in ${delayMs}ms")
+                try {
+                    Thread.sleep(delayMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+            }
+
+            val result = tryCaptureFrontOnce(provider, quality, startNs)
+            if (result.isNotEmpty()) {
+                scheduleWakeLockRelease()
+                return result
+            }
+            Log.w(TAG, "captureFrontPhoto: attempt $attempt failed")
+        }
+
+        // All retries exhausted — fallback to back camera
+        Log.w(TAG, "All $MAX_ATTEMPTS front attempts failed — fallback to back camera")
+        try {
+            bindBackCamera()
+        } catch (_: Exception) {
+            Log.e(TAG, "Fallback back camera also failed", Exception("Fallback bindBackCamera failed"))
+        }
+        ServiceStatus.recordCaptureResult(false, 0, "Front failed after $MAX_ATTEMPTS retries")
+        scheduleWakeLockRelease()
+        return ByteArray(0)
+    }
+
+    /**
+     * Single front camera capture attempt (v2.0).
+     *
+     * Selective unbind: only unbinds the back ImageCapture, keeping the
+     * lifecycle binding intact. After capture, rebinds the back camera.
+     *
+     * @param provider ProcessCameraProvider (captured before retry loop)
+     * @param quality Photo quality tier
+     * @param startNs NanoTime at capture start (for duration measurement)
+     */
+    private fun tryCaptureFrontOnce(
+        provider: ProcessCameraProvider,
+        quality: String,
+        startNs: Long
+    ): ByteArray {
         val (tw, th) = when (quality.lowercase()) {
             PhotoQuality.MEDIUM -> PhotoQuality.MEDIUM_W to PhotoQuality.MEDIUM_H
             PhotoQuality.LOW    -> PhotoQuality.LOW_W    to PhotoQuality.LOW_H
-            else               -> PhotoQuality.HIGH_W    to PhotoQuality.HIGH_H
+            else               -> PhotoQuality.HIGH_W   to PhotoQuality.HIGH_H
         }
         val jpegQ = PhotoQuality.jpegQualityFor(quality)
 
@@ -317,22 +420,33 @@ class CameraForegroundService : LifecycleService() {
             .build()
 
         return try {
-            provider.unbindAll()
+            // Selective unbind: only unbind back ImageCapture, keep lifecycle binding intact
+            backImageCapture?.let {
+                provider.unbind(it)
+                backImageCapture = null
+                ServiceStatus.setBackCameraBound(false)
+            }
+
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, frontCapture)
             ServiceStatus.updateCameraStatus { copy(frontCameraBound = true) }
-            val resumed = awaitLifecycleResumed(2000)
-            if (!resumed) Log.w(TAG, "captureFrontPhoto: lifecycle not RESUMED within 2s")
+
+            // v2.0: extend from 3000ms to 15000ms to handle Doze mode delays
+            val resumed = awaitLifecycleResumed(LIFECYCLE_TIMEOUT)
+            if (!resumed) {
+                Log.w(TAG, "captureFrontPhoto: lifecycle not RESUMED within ${LIFECYCLE_TIMEOUT}ms")
+            }
+
             val result = doCapture(frontCapture, jpegQ, startNs)
+
+            // Unbind front and restore back camera
+            provider.unbind(frontCapture)
             bindBackCamera()
             result
         } catch (e: Exception) {
-            Log.e(TAG, "captureFrontPhoto failed", e)
-            try { bindBackCamera() } catch (_: Exception) {}
-            ServiceStatus.recordCaptureResult(false, 0, "Front capture: ${e.message}")
+            Log.e(TAG, "tryCaptureFrontOnce failed: ${e.message}", e)
             ByteArray(0)
         }.also {
             ServiceStatus.updateCameraStatus { copy(frontCameraBound = false) }
-            scheduleWakeLockRelease()
         }
     }
 
@@ -382,7 +496,7 @@ class CameraForegroundService : LifecycleService() {
             return ByteArray(0)
         }
 
-        // Scale to exact target dimensions (toJpeg gave us native resolution from CameraX)
+        // Scale to exact target dimensions
         val (maxW, maxH) = when (quality) {
             PhotoQuality.jpegQualityFor(PhotoQuality.HIGH)   -> PhotoQuality.HIGH_W   to PhotoQuality.HIGH_H
             PhotoQuality.jpegQualityFor(PhotoQuality.MEDIUM) -> PhotoQuality.MEDIUM_W to PhotoQuality.MEDIUM_H

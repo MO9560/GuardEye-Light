@@ -128,7 +128,7 @@ class LightBotService : LifecycleService() {
     // ── Bind / unbind camera service ──────────────────────────────────────
 
     private fun bindCameraService() {
-        if (cameraSvc == null) {
+        if (CameraForegroundService.instance == null) {
             val intent = Intent(this, CameraForegroundService::class.java)
             startForegroundService(intent)
             Log.d(TAG, "bindCameraService: started CameraForegroundService")
