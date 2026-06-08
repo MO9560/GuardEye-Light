@@ -101,19 +101,15 @@ class CameraForegroundService : LifecycleService() {
     private val CHANNEL_ID = "guardeye_camera_svc"
     private val NOTIF_ID   = 2002
 
-    // ── Front camera retry constants (v2.0) ────────────────────────────────
-    // Total attempts = FRONT_MAX_ATTEMPTS (index 0, 1, 2 = 3 attempts)
-    private companion object FrontRetry {
-        const val MAX_ATTEMPTS      = 3
-        const val INITIAL_DELAY_MS  = 500L   // attempt 1: 500ms, attempt 2: 1000ms, attempt 3: 2000ms
-        const val MAX_DELAY_MS      = 3000L  // cap
-        const val LIFECYCLE_TIMEOUT = 15_000L // Doze can delay lifecycle by several seconds
+    // ── Front camera retry constants (v2.0, class-level so instance methods can reference) ──
+    private const val FRONT_MAX_ATTEMPTS     = 3
+    private const val FRONT_INITIAL_DELAY_MS  = 500L
+    private const val FRONT_MAX_DELAY_MS      = 3000L
+    private const val LIFECYCLE_TIMEOUT_MS    = 15_000L  // Doze can delay lifecycle by several seconds
 
-        /** Exponential backoff: delay = INITIAL_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS */
-        fun backoffDelay(attemptIndex: Int): Long {
-            // attemptIndex is 1-based: 1 → 500ms, 2 → 1000ms, 3 → 2000ms
-            return (INITIAL_DELAY_MS * (1L shl (attemptIndex - 1))).coerceAtMost(MAX_DELAY_MS)
-        }
+    /** Exponential backoff: delay = INITIAL_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS */
+    private fun frontBackoffDelay(attemptIndex: Int): Long {
+        return (FRONT_INITIAL_DELAY_MS * (1L shl (attemptIndex - 1))).coerceAtMost(FRONT_MAX_DELAY_MS)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -353,7 +349,7 @@ class CameraForegroundService : LifecycleService() {
         }
 
         // ── Retry loop: attempt 0, 1, 2 (total 3 attempts) ──
-        for (attempt in 0 until MAX_ATTEMPTS) {
+        for (attempt in 0 until FRONT_MAX_ATTEMPTS) {
             // Re-check provider state before each retry attempt.
             // Provider can become null if the service is destroyed between attempts.
             if (attempt > 0) {
@@ -361,7 +357,7 @@ class CameraForegroundService : LifecycleService() {
                     Log.w(TAG, "captureFrontPhoto: provider gone at retry $attempt — breaking")
                     break
                 }
-                val delayMs = backoffDelay(attempt)
+                val delayMs = frontBackoffDelay(attempt)
                 Log.d(TAG, "captureFrontPhoto: retry $attempt in ${delayMs}ms")
                 try {
                     Thread.sleep(delayMs)
@@ -380,13 +376,13 @@ class CameraForegroundService : LifecycleService() {
         }
 
         // All retries exhausted — fallback to back camera
-        Log.w(TAG, "All $MAX_ATTEMPTS front attempts failed — fallback to back camera")
+        Log.w(TAG, "All $FRONT_MAX_ATTEMPTS front attempts failed — fallback to back camera")
         try {
             bindBackCamera()
         } catch (_: Exception) {
             Log.e(TAG, "Fallback back camera also failed", Exception("Fallback bindBackCamera failed"))
         }
-        ServiceStatus.recordCaptureResult(false, 0, "Front failed after $MAX_ATTEMPTS retries")
+        ServiceStatus.recordCaptureResult(false, 0, "Front failed after $FRONT_MAX_ATTEMPTS retries")
         scheduleWakeLockRelease()
         return ByteArray(0)
     }
@@ -431,9 +427,9 @@ class CameraForegroundService : LifecycleService() {
             ServiceStatus.updateCameraStatus { copy(frontCameraBound = true) }
 
             // v2.0: extend from 3000ms to 15000ms to handle Doze mode delays
-            val resumed = awaitLifecycleResumed(LIFECYCLE_TIMEOUT)
+            val resumed = awaitLifecycleResumed(LIFECYCLE_TIMEOUT_MS)
             if (!resumed) {
-                Log.w(TAG, "captureFrontPhoto: lifecycle not RESUMED within ${LIFECYCLE_TIMEOUT}ms")
+                Log.w(TAG, "captureFrontPhoto: lifecycle not RESUMED within ${LIFECYCLE_TIMEOUT_MS}ms")
             }
 
             val result = doCapture(frontCapture, jpegQ, startNs)
