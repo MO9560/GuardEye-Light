@@ -37,6 +37,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Settings Activity -->
+        <activity
+            android:name=".light.LightSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.GuardEye" />
+
         <!-- Light Bot Service — handles polling + capture in one service -->
         <service
             android:name=".light.LightBotService"

@@ -134,10 +134,12 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()
         }
 
-        // Tabs
-        ui.tabSettings.setOnClickListener {
-            Toast.makeText(this, "设置页面开发中", Toast.LENGTH_SHORT).show()
+        // Settings icon (header) + tab
+        val openSettings: (View) -> Unit = { _ ->
+            startActivity(Intent(this, LightSettingsActivity::class.java))
         }
+        ui.btnOpenSettings.setOnClickListener(openSettings)
+        ui.tabSettings.setOnClickListener(openSettings)
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()
