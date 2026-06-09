@@ -5,25 +5,33 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.text.method.PasswordTransformationMethod
-
+import android.view.SurfaceHolder
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.guardeye.Config
 import com.guardeye.light.ACTION_MANUAL_CAPTURE
 import com.guardeye.light.ACTION_REQUEST_BATTERY
 import com.guardeye.R
 import com.guardeye.databinding.LightActivityMainBinding
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
- * LightMainActivity — card-style settings UI for GuardEye Light.
+ * LightMainActivity — v4 candy-color UI for GuardEye Light.
  */
 class LightMainActivity : AppCompatActivity() {
 
     private lateinit var ui: LightActivityMainBinding
-    private var tokenVisible = false
+    private lateinit var cameraExecutor: ExecutorService
+
+    private var previewEnabled = false
+    private var cameraBound = false
 
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -41,6 +49,8 @@ class LightMainActivity : AppCompatActivity() {
         Config.init(this)
         ui = LightActivityMainBinding.inflate(layoutInflater)
         setContentView(ui.root)
+
+        cameraExecutor = Executors.newSingleThreadExecutor()
 
         checkPermissions()
         loadConfig()
@@ -63,37 +73,17 @@ class LightMainActivity : AppCompatActivity() {
     }
 
     private fun loadConfig() {
-        ui.inputToken.setText(Config.botToken)
-        ui.inputChatId.setText(Config.chatId)
         ui.sliderInterval.value = Config.intervalMinutes.toFloat()
         updateIntervalText(Config.intervalMinutes)
-        ui.switchDebug.isChecked = Config.debugMode
-
-        // Hide token by default
-        tokenVisible = false
-        ui.inputToken.transformationMethod = PasswordTransformationMethod.getInstance()
+        previewEnabled = false
+        applyPreviewToggle()
     }
 
     private fun setupListeners() {
-        // Save config button
-        ui.btnSaveConfig.setOnClickListener {
-            if (!validateConfig()) return@setOnClickListener
-            saveConfig()
-            Toast.makeText(this, "\u4fdd\u5b58\u6210\u529f", Toast.LENGTH_SHORT).show()
-        }
-
-        // Token visibility toggle
-        ui.btnToggleToken.setOnClickListener {
-            tokenVisible = !tokenVisible
-            if (tokenVisible) {
-                ui.inputToken.transformationMethod = null
-                ui.btnToggleToken.setImageResource(R.drawable.ic_eye_off_outline)
-            } else {
-                ui.inputToken.transformationMethod = PasswordTransformationMethod.getInstance()
-                ui.btnToggleToken.setImageResource(R.drawable.ic_eye_outline)
-            }
-            // Move cursor to end
-                ui.inputToken.setSelection(ui.inputToken.text?.length ?: 0)
+        // Preview toggle
+        ui.btnTogglePreview.setOnClickListener {
+            previewEnabled = !previewEnabled
+            applyPreviewToggle()
         }
 
         // Interval slider
@@ -103,17 +93,20 @@ class LightMainActivity : AppCompatActivity() {
             updateIntervalText(mins)
         }
 
-        // Start/Stop button
+        // Start / Stop
         ui.btnStartStop.setOnClickListener {
-            if (!validateConfig()) return@setOnClickListener
             saveConfig()
 
             if (Config.enabled) {
                 Config.enabled = false
                 LightAlarmReceiver.cancelAlarm(this)
                 stopService(Intent(this, LightBotService::class.java))
+                stopCameraPreview()
+                previewEnabled = false
+                applyPreviewToggle()
                 refreshStatus()
             } else {
+                if (!validateConfig()) return@setOnClickListener
                 Config.enabled = true
                 LightAlarmReceiver.scheduleAlarm(this, Config.intervalMinutes)
                 startForegroundService(Intent(this, LightBotService::class.java))
@@ -121,7 +114,7 @@ class LightMainActivity : AppCompatActivity() {
             }
         }
 
-        // Photo capture (tap the photo icon column)
+        // Photo
         ui.btnPhoto.setOnClickListener {
             if (!validateConfig()) return@setOnClickListener
             saveConfig()
@@ -132,7 +125,7 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
         }
 
-        // Battery hint tap → open settings
+        // Battery
         ui.textBatteryHint.setOnClickListener {
             val intent = Intent(this, LightBotService::class.java).apply {
                 action = ACTION_REQUEST_BATTERY
@@ -141,48 +134,146 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()
         }
 
-        // Bottom tabs
-        ui.tabSettings.setOnClickListener { /* already on settings */ }
+        // Tabs
+        ui.tabSettings.setOnClickListener {
+            Toast.makeText(this, "设置页面开发中", Toast.LENGTH_SHORT).show()
+        }
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()
         }
     }
 
+    /**
+     * Apply preview toggle state:
+     * - Toggle button background + badge color
+     * - Preview card content (live gradient vs grey placeholder)
+     * - Camera binding
+     */
+    private fun applyPreviewToggle() {
+        if (previewEnabled && Config.enabled) {
+            ui.previewPlaceholder.visibility = View.GONE
+            ui.liveOverlay.visibility = View.VISIBLE
+            ui.btnTogglePreview.setBackgroundResource(R.drawable.preview_toggle_bg_on)
+            ui.badgePreview.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.candy_running)
+            ui.previewSurface.visibility = View.VISIBLE
+            startCameraPreview()
+        } else {
+            ui.previewPlaceholder.visibility = View.VISIBLE
+            ui.liveOverlay.visibility = View.GONE
+            ui.btnTogglePreview.setBackgroundResource(R.drawable.preview_toggle_bg)
+            ui.badgePreview.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.primary)
+            ui.previewSurface.visibility = View.GONE
+            stopCameraPreview()
+        }
+
+        ui.textPreviewHint.text = when {
+            !Config.enabled -> "取景区 · 未启动"
+            previewEnabled -> "取景区 · 实时"
+            else -> "取景区 · 已关闭预览"
+        }
+    }
+
+    private fun startCameraPreview() {
+        if (cameraBound) return
+        val surfaceView = ui.previewSurface
+        if (surfaceView.holder.surface.isValid) {
+            bindCamera(surfaceView.holder.surface)
+        } else {
+            surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
+                override fun surfaceCreated(holder: SurfaceHolder) {
+                    bindCamera(holder.surface)
+                }
+                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    stopCameraPreview()
+                }
+            })
+        }
+    }
+
+    private fun bindCamera(surface: android.view.Surface) {
+        try {
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    // Use setSurfaceProvider with a simple SurfaceProvider
+                    val preview = Preview.Builder().build()
+                    preview.setSurfaceProvider { request ->
+                        request.provideSurface(surface, cameraExecutor) { }
+                    }
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        this, CameraSelector.DEFAULT_BACK_CAMERA, preview)
+                    cameraBound = true
+                } catch (e: Exception) {
+                    cameraBound = false
+                }
+            }, ContextCompat.getMainExecutor(this))
+        } catch (e: Exception) {
+            // Surface may not be ready yet
+        }
+    }
+
+    private fun stopCameraPreview() {
+        if (!cameraBound) return
+        try {
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
+                cameraProvider.unbindAll()
+                cameraBound = false
+            }, ContextCompat.getMainExecutor(this))
+        } catch (_: Exception) {
+            cameraBound = false
+        }
+    }
+
     private fun refreshStatus() {
         val running = Config.enabled
+
         ui.btnStartStop.text = if (running) "停止监控" else "开始监控"
         ui.btnStartStop.backgroundTintList =
-            androidx.core.content.ContextCompat.getColorStateList(this,
-                if (running) R.color.red else R.color.primary)
+            ContextCompat.getColorStateList(this,
+                if (running) R.color.candy_btn_stop else R.color.candy_btn_start)
 
-        // Status dot color
-        ui.dotStatus.setBackgroundResource(
-            if (running) R.drawable.status_dot_green else R.drawable.status_dot)
+        ui.cardStatus.setBackgroundResource(
+            if (running) R.drawable.card_candy_running else R.drawable.card_candy_cam)
+        ui.textStatus.text = "●"
+        ui.labelStatus.text = if (running) "运行" else "停止"
 
-        // Update interval text with status
+        ui.badgePreview.backgroundTintList =
+            ContextCompat.getColorStateList(this,
+                if (running) R.color.candy_running else R.color.primary)
+
+        ui.textPreviewHint.text = if (running) "取景区 · 已关闭预览" else "取景区 · 未启动"
+
         val mins = Config.intervalMinutes
-        ui.textInterval.text = mins.toString() + "\u5206"
+        ui.textInterval.text = "${mins}分"
+        ui.textTemp.text = "36\u2103"
     }
 
     private fun validateConfig(): Boolean {
-        val token = ui.inputToken.text.toString().trim()
-        val chatId = ui.inputChatId.text.toString().trim()
-        if (token.isBlank() || chatId.isBlank()) {
-            Toast.makeText(this, "请先填写 Token 和 Chat ID", Toast.LENGTH_LONG).show()
+        if (Config.botToken.isBlank() || Config.chatId.isBlank()) {
+            Toast.makeText(this, "请先在设置中填写 Token 和 Chat ID", Toast.LENGTH_LONG).show()
             return false
         }
         return true
     }
 
     private fun saveConfig() {
-        Config.botToken = ui.inputToken.text.toString().trim()
-        Config.chatId = ui.inputChatId.text.toString().trim()
         Config.intervalMinutes = ui.sliderInterval.value.toInt()
-        Config.debugMode = ui.switchDebug.isChecked
     }
 
     private fun updateIntervalText(mins: Int) {
-        ui.textInterval.text = mins.toString() + "\u5206"
+        ui.textInterval.text = "${mins}分"
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        cameraExecutor.shutdown()
     }
 }

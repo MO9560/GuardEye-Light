@@ -111,4 +111,5 @@ dependencies {
     "lightImplementation"("androidx.camera:camera-core:1.3.1")
     "lightImplementation"("androidx.camera:camera-camera2:1.3.1")
     "lightImplementation"("androidx.camera:camera-lifecycle:1.3.1")
+    "lightImplementation"("androidx.camera:camera-view:1.3.1")
 }
