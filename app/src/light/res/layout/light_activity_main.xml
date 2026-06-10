@@ -29,37 +29,13 @@
                 android:textSize="17sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.02"/>
-
-            <!-- Settings icon -->
-            <ImageButton
-                android:id="@+id/btnOpenSettings"
-                android:layout_width="36dp" android:layout_height="36dp"
-                android:background="@drawable/btn_icon_circle"
-                android:src="@drawable/ic_settings"
-                app:tint="@color/text_secondary"
-                android:contentDescription="设置"
-                android:padding="8dp"/>
-
-            <!-- Preview badge (top-right) -->
-            <TextView
-                android:id="@+id/badgePreview"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="预览"
-                android:textColor="@color/white"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="3dp"
-                android:background="@drawable/badge_candy"
-                android:letterSpacing="0.5"/>
         </LinearLayout>
 
         <!-- ═══ Preview Card (4:3, dark) ═══ -->
         <FrameLayout
             android:id="@+id/previewCard"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
+            android:layout_height="246dp"
             android:layout_marginBottom="14dp"
             android:layout_marginHorizontal="0dp"
             android:background="@drawable/preview_card_bg"

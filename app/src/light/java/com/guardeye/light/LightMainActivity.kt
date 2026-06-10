@@ -1,8 +1,11 @@
 package com.guardeye.light
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.view.SurfaceHolder
@@ -125,7 +128,7 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
         }
 
-        // Battery
+        // Battery hint / battery temp
         ui.textBatteryHint.setOnClickListener {
             val intent = Intent(this, LightBotService::class.java).apply {
                 action = ACTION_REQUEST_BATTERY
@@ -134,12 +137,12 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()
         }
 
-        // Settings icon (header) + tab
-        val openSettings: (View) -> Unit = { _ ->
+        // Settings tab
+        ui.tabSettings.setOnClickListener {
             startActivity(Intent(this, LightSettingsActivity::class.java))
         }
-        ui.btnOpenSettings.setOnClickListener(openSettings)
-        ui.tabSettings.setOnClickListener(openSettings)
+
+        // Help tab
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()
@@ -148,7 +151,7 @@ class LightMainActivity : AppCompatActivity() {
 
     /**
      * Apply preview toggle state:
-     * - Toggle button background + badge color
+     * - Toggle button background
      * - Preview card content (live gradient vs grey placeholder)
      * - Camera binding
      */
@@ -157,16 +160,12 @@ class LightMainActivity : AppCompatActivity() {
             ui.previewPlaceholder.visibility = View.GONE
             ui.liveOverlay.visibility = View.VISIBLE
             ui.btnTogglePreview.setBackgroundResource(R.drawable.preview_toggle_bg_on)
-            ui.badgePreview.backgroundTintList =
-                ContextCompat.getColorStateList(this, R.color.candy_running)
             ui.previewSurface.visibility = View.VISIBLE
             startCameraPreview()
         } else {
             ui.previewPlaceholder.visibility = View.VISIBLE
             ui.liveOverlay.visibility = View.GONE
             ui.btnTogglePreview.setBackgroundResource(R.drawable.preview_toggle_bg)
-            ui.badgePreview.backgroundTintList =
-                ContextCompat.getColorStateList(this, R.color.primary)
             ui.previewSurface.visibility = View.GONE
             stopCameraPreview()
         }
@@ -202,7 +201,6 @@ class LightMainActivity : AppCompatActivity() {
             cameraProviderFuture.addListener({
                 try {
                     val cameraProvider = cameraProviderFuture.get()
-                    // Use setSurfaceProvider with a simple SurfaceProvider
                     val preview = Preview.Builder().build()
                     preview.setSurfaceProvider { request ->
                         request.provideSurface(surface, cameraExecutor) { }
@@ -243,19 +241,21 @@ class LightMainActivity : AppCompatActivity() {
                 if (running) R.color.candy_btn_stop else R.color.candy_btn_start)
 
         ui.cardStatus.setBackgroundResource(
-            if (running) R.drawable.card_candy_running else R.drawable.card_candy_cam)
+            if (running) R.drawable.card_candy_start else R.drawable.card_candy_stop)
         ui.textStatus.text = "●"
         ui.labelStatus.text = if (running) "运行" else "停止"
-
-        ui.badgePreview.backgroundTintList =
-            ContextCompat.getColorStateList(this,
-                if (running) R.color.candy_running else R.color.primary)
 
         ui.textPreviewHint.text = if (running) "取景区 · 已关闭预览" else "取景区 · 未启动"
 
         val mins = Config.intervalMinutes
         ui.textInterval.text = "${mins}分"
-        ui.textTemp.text = "36\u2103"
+        updateTemp()
+    }
+
+    private fun updateTemp() {
+        val intent = registerReceiver(null, IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val temp = intent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+        ui.textTemp.text = if (temp > 0) "${temp / 10}℃" else "--℃"
     }
 
     private fun validateConfig(): Boolean {
@@ -272,6 +272,11 @@ class LightMainActivity : AppCompatActivity() {
 
     private fun updateIntervalText(mins: Int) {
         ui.textInterval.text = "${mins}分"
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateTemp()
     }
 
     override fun onDestroy() {

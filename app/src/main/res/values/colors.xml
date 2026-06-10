@@ -24,9 +24,9 @@
     <!-- Candy Color Palette (UI v4) -->
     <color name="candy_running">#06D6A0</color>
     <color name="candy_stopped">#FF6B6B</color>
-    <color name="candy_interval">#74B9FF</color>
+    <color name="candy_interval">#06D6A0</color>
     <color name="candy_temp">#FDCB6E</color>
-    <color name="candy_cam">#2D3436</color>
+    <color name="candy_cam">#4A4A5A</color>
     <color name="candy_btn_start">#0984E3</color>
     <color name="candy_btn_stop">#D63031</color>
     <color name="preview_card_bg">#1A1A2E</color>
