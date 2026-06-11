@@ -85,7 +85,10 @@ class LightMainActivity : AppCompatActivity() {
     private fun loadLastCaptureImage() {
         val path = Config.lastCapturePath
         if (path != null && File(path).exists()) {
-            ui.imageLastCapture.setImageURI(Uri.parse(path))
+            try {
+                val bm = android.graphics.BitmapFactory.decodeFile(path)
+                if (bm != null) ui.imageLastCapture.setImageBitmap(bm)
+            } catch (_: Exception) {}
         }
     }
 
