@@ -123,6 +123,8 @@ class LightMainActivity : AppCompatActivity() {
             }
             startForegroundService(svc)
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
+            // Reload image immediately (file was saved in previous session run)
+            ui.imageLastCapture.postDelayed({ loadLastCaptureImage() }, 2000)
         }
 
         ui.textBatteryHint.setOnClickListener {
