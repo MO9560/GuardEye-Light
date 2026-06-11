@@ -16,9 +16,6 @@ object Config {
     private const val KEY_ENABLED     = "enabled"
     private const val KEY_DETECTION   = "detection_enabled"
     private const val KEY_DEBUG       = "debug_enabled"
-    var debugMode: Boolean
-        get() = prefs.getBoolean(KEY_DEBUG, true)
-        set(v) = prefs.edit().putBoolean(KEY_DEBUG, v).apply()
     private const val KEY_CAM_FACING  = "camera_facing"
     private const val KEY_OFFSET      = "bot_offset"
     private const val KEY_LAST_INTERVAL_CAPTURE = "last_interval_capture"
@@ -47,7 +44,7 @@ object Config {
         get() = prefs.getBoolean(KEY_DETECTION, true)
         set(v) = prefs.edit().putBoolean(KEY_DETECTION, v).apply()
 
-    var debugEnabled: Boolean
+    var debugMode: Boolean
         get() = prefs.getBoolean(KEY_DEBUG, true)
         set(v) = prefs.edit().putBoolean(KEY_DEBUG, v).apply()
 
@@ -67,6 +64,10 @@ object Config {
         get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
         set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
 
+    var lastManualCaptureTime: Long
+        get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
+
     var lastCapturePath: String?
         get() = prefs.getString(KEY_LAST_CAPTURE_PATH, null)
         set(v) = prefs.edit().putString(KEY_LAST_CAPTURE_PATH, v).apply()
@@ -78,4 +79,7 @@ object Config {
     var alertMode: String
         get() = prefs.getString(KEY_ALERT_MODE, "photo") ?: "photo"
         set(v) = prefs.edit().putString(KEY_ALERT_MODE, v).apply()
+
+    val isConfigured: Boolean
+        get() = botToken.isNotBlank() && chatId.isNotBlank()
 }

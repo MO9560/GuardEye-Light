@@ -1,0 +1,352 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="24dp">
+
+        <!-- ═══ Header row ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="GuardEye Light v4"
+                android:textColor="@color/text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.02"/>
+        </LinearLayout>
+
+        <!-- ═══ Preview Card (4:3, dark) ═══ -->
+        <FrameLayout
+            android:id="@+id/previewCard"
+            android:layout_width="match_parent"
+            android:layout_height="246dp"
+            android:layout_marginBottom="14dp"
+            android:layout_marginHorizontal="0dp"
+            android:background="@drawable/preview_card_bg"
+            android:clipToOutline="true">
+
+            <!-- Placeholder state (shown when stopped or preview off) -->
+            <LinearLayout
+                android:id="@+id/previewPlaceholder"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:padding="16dp">
+
+                <ImageView
+                    android:layout_width="40dp" android:layout_height="40dp"
+                    android:src="@drawable/ic_camera_outline"
+                    app:tint="#3FFFFFFF"
+                    android:contentDescription="取景区占位"/>
+
+                <TextView
+                    android:id="@+id/textPreviewHint"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="取景区 · 未启动"
+                    android:textColor="#4D475569"
+                    android:textSize="12sp"
+                    android:letterSpacing="1"/>
+            </LinearLayout>
+
+            <!-- Live preview state (SurfaceView, shown when running + preview on) -->
+            <!-- Live preview state (SurfaceView, shown when running + preview on) -->
+            <SurfaceView
+                android:id="@+id/previewSurface"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+
+            <!-- Live indicator overlay -->
+            <LinearLayout
+                android:id="@+id/liveOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/preview_live_indicator_bg"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="7dp" android:layout_height="7dp"
+                    android:background="@drawable/rec_dot"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="实时预览"
+                    android:textColor="#AAFFFFFF"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.5"/>
+            </LinearLayout>
+
+            <!-- Preview toggle button (top-right corner) -->
+            <LinearLayout
+                android:id="@+id/btnTogglePreview"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:layout_margin="10dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/preview_toggle_bg"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp">
+
+                <ImageView
+                    android:id="@+id/iconPreviewEye"
+                    android:layout_width="14dp" android:layout_height="14dp"
+                    android:src="@drawable/ic_eye_outline"
+                    app:tint="@color/white"
+                    android:contentDescription="预览切换"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:text="预览"
+                    android:textColor="@color/white"
+                    android:textSize="11sp"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+
+        </FrameLayout>
+
+        <!-- ═══ 4 Quick Cards Row ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <!-- Status card -->
+            <LinearLayout
+                android:id="@+id/cardStatus"
+                android:layout_width="0dp" android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_candy_running"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/textStatus"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/labelStatus"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="停止"
+                    android:textColor="#A3FFFFFF"
+                    android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <!-- Interval card -->
+            <LinearLayout
+                android:id="@+id/cardInterval"
+                android:layout_width="0dp" android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_candy_interval"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/textInterval"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="5分"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="间隔"
+                    android:textColor="#A3FFFFFF"
+                    android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <!-- Temperature card -->
+            <LinearLayout
+                android:id="@+id/cardTemp"
+                android:layout_width="0dp" android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_candy_temp"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/textTemp"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="36℃"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="温度"
+                    android:textColor="#A3FFFFFF"
+                    android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <!-- Photo card (dark) -->
+            <LinearLayout
+                android:id="@+id/btnPhoto"
+                android:layout_width="0dp" android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_candy_cam"
+                android:padding="8dp"
+                android:foreground="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/ic_camera_solid"
+                    app:tint="@color/white"
+                    android:contentDescription="拍照"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="拍照"
+                    android:textColor="@color/white"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="3dp"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ═══ Interval Slider ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderInterval"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:valueFrom="1" android:valueTo="60" android:stepSize="1"
+                android:value="5"
+                app:trackColorActive="@color/primary"
+                app:thumbTint="@color/primary"/>
+        </LinearLayout>
+
+        <!-- ═══ Start / Stop Button ═══ -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartStop"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:text="开始监控"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            android:backgroundTint="@color/candy_btn_start"
+            app:cornerRadius="14dp"
+            android:stateListAnimator="@null"
+            android:elevation="0dp"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- ═══ Bottom Nav Bar ═══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/card_bg"
+            android:gravity="center_vertical"
+            android:paddingVertical="12dp">
+
+            <!-- Settings tab -->
+            <LinearLayout
+                android:id="@+id/tabSettings"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp">
+
+                <ImageView
+                    android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/ic_settings"
+                    app:tint="@color/primary"
+                    android:contentDescription="设置"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="设置"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="3dp"/>
+            </LinearLayout>
+
+            <!-- Help tab -->
+            <LinearLayout
+                android:id="@+id/tabHelp"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp">
+
+                <ImageView
+                    android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/ic_help_circle"
+                    app:tint="@color/primary"
+                    android:contentDescription="帮助"/>
+
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="帮助"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:layout_marginTop="3dp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Battery hint -->
+        <TextView
+            android:id="@+id/textBatteryHint"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="🔋 建议关闭电池优化以保持后台运行"
+            android:textSize="11sp"
+            android:textColor="@color/text_hint"/>
+
+    </LinearLayout>
+</ScrollView>
