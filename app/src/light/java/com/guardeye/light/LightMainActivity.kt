@@ -1,9 +1,11 @@
 ﻿package com.guardeye.light
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
@@ -13,18 +15,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.guardeye.Config
-import com.guardeye.light.ACTION_MANUAL_CAPTURE
-import com.guardeye.light.ACTION_REQUEST_BATTERY
 import com.guardeye.R
 import com.guardeye.databinding.LightActivityMainBinding
 import java.io.File
 
-/**
- * LightMainActivity — v2.2, preview removed, shows last capture image.
- */
 class LightMainActivity : AppCompatActivity() {
 
     private lateinit var ui: LightActivityMainBinding
+
+    private val captureReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            loadLastCaptureImage()
+        }
+    }
 
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -47,6 +50,16 @@ class LightMainActivity : AppCompatActivity() {
         loadConfig()
         setupListeners()
         refreshStatus()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerReceiver(captureReceiver, IntentFilter(ACTION_CAPTURE_UPDATED))
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try { unregisterReceiver(captureReceiver) } catch (_: Exception) {}
     }
 
     private fun checkPermissions() {
@@ -77,14 +90,12 @@ class LightMainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Interval slider
         ui.sliderInterval.addOnChangeListener { _, value, _ ->
             val mins = value.toInt()
             Config.intervalMinutes = mins
             updateIntervalText(mins)
         }
 
-        // Start / Stop
         ui.btnStartStop.setOnClickListener {
             saveConfig()
             if (Config.enabled) {
@@ -101,7 +112,6 @@ class LightMainActivity : AppCompatActivity() {
             }
         }
 
-        // Photo
         ui.btnPhoto.setOnClickListener {
             if (!validateConfig()) return@setOnClickListener
             saveConfig()
@@ -112,7 +122,6 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show()
         }
 
-        // Battery hint / battery temp
         ui.textBatteryHint.setOnClickListener {
             val intent = Intent(this, LightBotService::class.java).apply {
                 action = ACTION_REQUEST_BATTERY
@@ -121,12 +130,10 @@ class LightMainActivity : AppCompatActivity() {
             Toast.makeText(this, "请选择「不限」或「不优化」", Toast.LENGTH_LONG).show()
         }
 
-        // Settings tab
         ui.tabSettings.setOnClickListener {
             startActivity(Intent(this, LightSettingsActivity::class.java))
         }
 
-        // Help tab
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /interval N /debug /battery /test",
                 Toast.LENGTH_LONG).show()
@@ -152,8 +159,8 @@ class LightMainActivity : AppCompatActivity() {
     }
 
     private fun updateTemp() {
-        val intent = registerReceiver(null, IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-        val temp = intent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+        val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val temp = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
         ui.textTemp.text = if (temp > 0) "${temp / 10}℃" else "--℃"
     }
 

@@ -51,6 +51,7 @@ const val ACTION_CAPTURE          = "com.guardeye.light.ACTION_CAPTURE"
 const val ACTION_MANUAL_CAPTURE   = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
 const val ACTION_STOP             = "com.guardeye.light.ACTION_STOP"
 const val ACTION_REQUEST_BATTERY  = "com.guardeye.light.ACTION_REQUEST_BATTERY"
+const val ACTION_CAPTURE_UPDATED   = "com.guardeye.light.ACTION_CAPTURE_UPDATED"
 const val ACTION_PREVIEW_FRONT    = "com.guardeye.light.ACTION_PREVIEW_FRONT"
 
 // ── Photo quality tiers ─────────────────────────────────────────────────────
