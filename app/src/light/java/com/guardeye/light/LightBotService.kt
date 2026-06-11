@@ -490,6 +490,7 @@ class LightBotService : LifecycleService() {
                         image.close()
                         capturing = false
                         Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source, quality=$quality")
+                        saveLastCapture(data)
                         processAndSend(data, source, quality)
                         onDone?.invoke()
                     }
