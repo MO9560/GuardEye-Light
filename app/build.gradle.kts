@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -13,10 +13,8 @@ android {
         applicationId = "com.guardeye"
         minSdk = 26
         targetSdk = 34
-        versionCode = providers.exec { commandLine("git", "rev-list", "HEAD", "--count") }
-            .standardOutput.asText.get().trim().toInt()
-        versionName = "2.1." + providers.exec { commandLine("git", "rev-list", "HEAD", "--count") }
-            .standardOutput.asText.get().trim()
+        versionCode = 1
+        versionName = "2.2.1"
     }
 
     signingConfigs {

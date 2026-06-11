@@ -1,4 +1,4 @@
-package com.guardeye.light
+﻿package com.guardeye.light
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -40,6 +40,7 @@ import android.graphics.Matrix
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.io.File
 
 // ── Camera orientation ───────────────────────────────────────────────────────
 // CameraX landscape-shot EXIF: try 90f first, switch to 270f if inverted
@@ -775,6 +776,18 @@ class LightBotService : LifecycleService() {
 
     // ── Send Photo ──────────────────────────────────────────────────────────────
 
+    private fun saveLastCapture(data: ByteArray) {
+        try {
+            val dir = getExternalFilesDir("photos") ?: filesDir
+            if (!dir.exists()) dir.mkdirs()
+            val file = File(dir, "last_capture.jpg")
+            file.writeBytes(data)
+            Config.lastCapturePath = file.absolutePath
+            Log.d(TAG, "Last capture saved: " + file.absolutePath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save last capture", e)
+        }
+    }
     private fun processAndSend(jpegData: ByteArray, source: String, quality: String) {
         cmdScope.launch(Dispatchers.IO) {
             try {

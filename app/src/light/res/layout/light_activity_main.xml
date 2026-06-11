@@ -24,110 +24,24 @@
             <TextView
                 android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="GuardEye Light v4"
+                android:text="GuardEye Light v2.2"
                 android:textColor="@color/text_primary"
                 android:textSize="17sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.02"/>
         </LinearLayout>
-
-        <!-- ═══ Preview Card (4:3, dark) ═══ -->
-        <FrameLayout
-            android:id="@+id/previewCard"
+        <!-- Last Capture Image (16:9) -->
+        <ImageView
+            android:id="@+id/imageLastCapture"
             android:layout_width="match_parent"
-            android:layout_height="246dp"
+            android:layout_height="0dp"
             android:layout_marginBottom="14dp"
-            android:layout_marginHorizontal="0dp"
+            android:adjustViewBounds="true"
+            android:maxHeight="220dp"
+            android:scaleType="centerCrop"
             android:background="@drawable/preview_card_bg"
-            android:clipToOutline="true">
-
-            <!-- Placeholder state (shown when stopped or preview off) -->
-            <LinearLayout
-                android:id="@+id/previewPlaceholder"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="16dp">
-
-                <ImageView
-                    android:layout_width="40dp" android:layout_height="40dp"
-                    android:src="@drawable/ic_camera_outline"
-                    app:tint="#3FFFFFFF"
-                    android:contentDescription="取景区占位"/>
-
-                <TextView
-                    android:id="@+id/textPreviewHint"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="取景区 · 未启动"
-                    android:textColor="#4D475569"
-                    android:textSize="12sp"
-                    android:letterSpacing="1"/>
-            </LinearLayout>
-
-            <!-- Live preview state (SurfaceView, shown when running + preview on) -->
-            <SurfaceView
-                android:id="@+id/previewSurface"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:visibility="gone"/>
-
-            <!-- Live indicator overlay -->
-            <LinearLayout
-                android:id="@+id/liveOverlay"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/preview_live_indicator_bg"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="5dp"
-                android:visibility="gone">
-
-                <View
-                    android:layout_width="7dp" android:layout_height="7dp"
-                    android:background="@drawable/rec_dot"/>
-
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:text="实时预览"
-                    android:textColor="#AAFFFFFF"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.5"/>
-            </LinearLayout>
-
-            <!-- Preview toggle button (top-right corner) -->
-            <LinearLayout
-                android:id="@+id/btnTogglePreview"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_gravity="top|end"
-                android:layout_margin="10dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/preview_toggle_bg"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="5dp">
-
-                <ImageView
-                    android:id="@+id/iconPreviewEye"
-                    android:layout_width="14dp" android:layout_height="14dp"
-                    android:src="@drawable/ic_eye_outline"
-                    app:tint="@color/white"
-                    android:contentDescription="预览切换"/>
-
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
-                    android:text="预览"
-                    android:textColor="@color/white"
-                    android:textSize="11sp"
-                    android:textStyle="bold"/>
-            </LinearLayout>
-
-        </FrameLayout>
+            android:src="@drawable/ic_camera_outline"
+            android:contentDescription="最近拍照"/>
 
         <!-- ═══ 4 Quick Cards Row ═══ -->
         <LinearLayout
