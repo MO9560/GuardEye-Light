@@ -40,173 +40,80 @@
                 android:layout_marginStart="12dp"/>
         </LinearLayout>
 
-        <!-- Tabs -->
+        <!-- Bot Token -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:background="@drawable/card_bg"
-            android:padding="4dp"
-            android:layout_marginBottom="12dp">
+            android:padding="14dp"
+            android:layout_marginBottom="10dp">
 
-            <Button
-                android:id="@+id/tabBasic"
-                android:layout_width="0dp" android:layout_weight="1"
-                android:layout_height="38dp"
-                android:text="基本"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:backgroundTint="@color/primary"
-                android:textColor="@color/white"
-                app:cornerRadius="8dp"
-                android:stateListAnimator="@null"
-                android:elevation="0dp"/>
-
-            <Button
-                android:id="@+id/tabCamera"
-                android:layout_width="0dp" android:layout_weight="1"
-                android:layout_height="38dp"
-                android:text="相机"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:backgroundTint="@color/card_bg"
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Bot Token"
                 android:textColor="@color/text_primary"
-                app:cornerRadius="8dp"
-                android:stateListAnimator="@null"
-                android:elevation="0dp"/>
-        </LinearLayout>
+                android:textSize="13sp"
+                android:textStyle="bold"/>
 
-        <!-- Basic tab content -->
-        <LinearLayout
-            android:id="@+id/contentBasic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <!-- Bot Token -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@drawable/card_bg"
-                android:padding="14dp"
-                android:layout_marginBottom="10dp">
-
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Bot Token"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="6dp">
-
-                    <EditText
-                        android:id="@+id/editToken"
-                        android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:hint="输入 Telegram Bot Token"
-                        android:textColorHint="@color/text_hint"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:backgroundTint="@color/primary"
-                        android:inputType="textPassword"
-                        android:singleLine="true"/>
-
-                    <ImageButton
-                        android:id="@+id/btnToggleToken"
-                        android:layout_width="36dp" android:layout_height="36dp"
-                        android:background="@drawable/btn_icon_circle"
-                        android:src="@drawable/ic_eye_outline"
-                        app:tint="@color/text_hint"
-                        android:contentDescription="显隐"
-                        android:padding="7dp"
-                        android:layout_marginStart="6dp"/>
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- Chat ID -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@drawable/card_bg"
-                android:padding="14dp"
-                android:layout_marginBottom="10dp">
-
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Chat ID"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold"/>
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
 
                 <EditText
-                    android:id="@+id/editChatId"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:hint="输入 Chat ID"
+                    android:id="@+id/editToken"
+                    android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:hint="输入 Telegram Bot Token"
                     android:textColorHint="@color/text_hint"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp"
                     android:backgroundTint="@color/primary"
-                    android:inputType="number"
-                    android:singleLine="true"
-                    android:layout_marginTop="6dp"/>
+                    android:inputType="textPassword"
+                    android:singleLine="true"/>
+
+                <ImageButton
+                    android:id="@+id/btnToggleToken"
+                    android:layout_width="36dp" android:layout_height="36dp"
+                    android:background="@drawable/btn_icon_circle"
+                    android:src="@drawable/ic_eye_outline"
+                    app:tint="@color/text_hint"
+                    android:contentDescription="显隐"
+                    android:padding="7dp"
+                    android:layout_marginStart="6dp"/>
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Camera tab content -->
+        <!-- Chat ID -->
         <LinearLayout
-            android:id="@+id/contentCamera"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone">
+            android:background="@drawable/card_bg"
+            android:padding="14dp"
+            android:layout_marginBottom="10dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@drawable/card_bg"
-                android:padding="14dp"
-                android:layout_marginBottom="10dp">
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Chat ID"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"/>
 
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="相机设置"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold"/>
-
-                <RadioGroup
-                    android:id="@+id/radioCamera"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="8dp">
-
-                    <RadioButton
-                        android:id="@+id/radioBack"
-                        android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text="后置"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"
-                        android:checked="true"/>
-
-                    <RadioButton
-                        android:id="@+id/radioFront"
-                        android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text="前置"
-                        android:textColor="@color/text_primary"
-                        android:textSize="13sp"/>
-                </RadioGroup>
-            </LinearLayout>
+            <EditText
+                android:id="@+id/editChatId"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="输入 Chat ID"
+                android:textColorHint="@color/text_hint"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:backgroundTint="@color/primary"
+                android:inputType="number"
+                android:singleLine="true"
+                android:layout_marginTop="6dp"/>
         </LinearLayout>
 
         <!-- Save button -->
@@ -229,7 +136,8 @@
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:gravity="center"
-            android:text="GuardEye Light v2.2.1\n© 2026 GuardEye"
+            android:text="GuardEye Light v2.2.1
+© 2026 GuardEye"
             android:textSize="11sp"
             android:textColor="@color/text_hint"
             android:lineSpacingMultiplier="1.3"/>
