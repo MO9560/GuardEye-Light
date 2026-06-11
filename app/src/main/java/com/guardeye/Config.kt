@@ -60,6 +60,10 @@ object Config {
         get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE, 0L)
         set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE, v).apply()
 
+    var lastIntervalCaptureTime: Long
+        get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE, v).apply()
+
     var lastManualCapture: Long
         get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
         set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
