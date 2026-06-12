@@ -50,20 +50,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleLightDebug --no-daemon --stacktrace
 
-      - name: Upload GuardEye full APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: GuardEye-full-debug
-          path: app/build/outputs/apk/full/debug/app-full-debug.apk
-          retention-days: 30
-
-      - name: Upload GuardEye Light APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: GuardEye-light-debug
-          path: app/build/outputs/apk/light/debug/app-light-debug.apk
-          retention-days: 30
-
       - name: Upload APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
