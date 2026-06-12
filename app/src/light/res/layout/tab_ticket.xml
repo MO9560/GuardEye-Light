@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Interval selector -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:padding="14dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="查询间隔"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="告票监控自动查询的时间间隔"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="10dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="6dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnInterval5"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="5分钟"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/primary"
+                android:textColor="@color/text_primary"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnInterval10"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="10分钟"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/primary"
+                android:textColor="@color/text_primary"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnInterval15"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="15分钟"
+                android:textSize="12sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/primary"
+                android:textColor="@color/text_primary"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnInterval20"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="20分钟"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/primary"
+                android:textColor="@color/text_primary"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnInterval30"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="40dp"
+                android:text="30分钟"
+                android:textSize="12sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/primary"
+                android:textColor="@color/text_primary"/>
+
+            <View android:layout_width="0dp" android:layout_weight="1"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Plate list -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:padding="14dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="车牌列表"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="每行一个，如 MO2541（2大写字母+4位数字）"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/editPlates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="120dp"
+            android:gravity="top|start"
+            android:hint="MO2541&#10;AX4521&#10;MT9200"
+            android:textColorHint="@color/text_hint"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:backgroundTint="@color/primary"
+            android:inputType="textMultiLine"
+            android:padding="10dp"/>
+    </LinearLayout>
+
+    <!-- Save button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSaveTicket"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:text="保存设置"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:backgroundTint="@color/primary"
+        app:cornerRadius="12dp"
+        android:stateListAnimator="@null"
+        android:elevation="0dp"
+        android:layout_marginTop="4dp"/>
+
+</LinearLayout>

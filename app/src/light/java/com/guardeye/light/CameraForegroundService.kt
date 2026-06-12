@@ -1,5 +1,7 @@
 package com.guardeye.light
 
+import com.guardeye.light.LightBotService
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
@@ -140,7 +142,7 @@ class CameraForegroundService : LifecycleService() {
         // whitelist (OPT-7) which is handled separately in LightBotService.
         if (Config.enabled) {
             val restartIntent = Intent(this, LightBotService::class.java).apply {
-                action = ACTION_CAPTURE
+                action = LightBotService.ACTION_CAPTURE
             }
             startService(restartIntent)
             Log.d(TAG, "onTaskRemoved: service restarted to survive app swipe")

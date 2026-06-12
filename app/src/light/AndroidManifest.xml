@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -53,6 +53,12 @@
         <!-- Light Alarm Receiver — triggers capture -->
         <receiver
             android:name=".light.LightAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Ticket Alarm Receiver 触发告票查询 -->
+        <receiver
+            android:name=".light.LightAlarmReceiverTicket"
             android:enabled="true"
             android:exported="false" />
 

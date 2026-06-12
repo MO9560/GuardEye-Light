@@ -13,7 +13,7 @@
         android:paddingTop="32dp"
         android:paddingBottom="24dp">
 
-        <!-- ═══ Header row ═══ -->
+        <!-- Header row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,8 +29,33 @@
                 android:textSize="17sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.02"/>
+
+            <LinearLayout
+                android:id="@+id/badgeTicket"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/card_bg"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="8dp" android:layout_height="8dp"
+                    android:background="@drawable/rec_dot"
+                    android:id="@+id/dotTicket"
+                    android:layout_marginEnd="4dp"/>
+
+                <TextView
+                    android:id="@+id/textTicketBadge"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="告票关"
+                    android:textColor="@color/text_hint"
+                    android:textSize="11sp"/>
+            </LinearLayout>
         </LinearLayout>
-        <!-- Last Capture Image (16:9) -->
+
+        <!-- Last Capture Image -->
         <ImageView
             android:id="@+id/imageLastCapture"
             android:layout_width="match_parent"
@@ -43,7 +68,7 @@
             android:src="@drawable/ic_camera_outline"
             android:contentDescription="最近拍照"/>
 
-        <!-- ═══ 4 Quick Cards Row ═══ -->
+        <!-- 4 Quick Status Cards Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -55,7 +80,7 @@
                 android:id="@+id/cardStatus"
                 android:layout_width="0dp" android:layout_height="76dp"
                 android:layout_weight="1"
-                android:layout_marginEnd="6dp"
+                android:layout_marginEnd="4dp"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:background="@drawable/card_candy_running"
@@ -64,7 +89,7 @@
                 <TextView
                     android:id="@+id/textStatus"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="●"
+                    android:text="&#9679;"
                     android:textColor="@color/white"
                     android:textSize="18sp"
                     android:textStyle="bold"/>
@@ -78,12 +103,40 @@
                     android:layout_marginTop="2dp"/>
             </LinearLayout>
 
+            <!-- Ticket card -->
+            <LinearLayout
+                android:id="@+id/cardTicket"
+                android:layout_width="0dp" android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="2dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/card_candy_stop"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/textTicketStatus"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="&#9675;"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/labelTicket"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="停止"
+                    android:textColor="#A3FFFFFF"
+                    android:textSize="10sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
             <!-- Interval card -->
             <LinearLayout
                 android:id="@+id/cardInterval"
                 android:layout_width="0dp" android:layout_height="76dp"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="2dp"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:background="@drawable/card_candy_interval"
@@ -110,7 +163,7 @@
                 android:id="@+id/cardTemp"
                 android:layout_width="0dp" android:layout_height="76dp"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginStart="4dp"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:background="@drawable/card_candy_temp"
@@ -119,7 +172,7 @@
                 <TextView
                     android:id="@+id/textTemp"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="36℃"
+                    android:text="36&#8451;"
                     android:textColor="@color/white"
                     android:textSize="18sp"
                     android:textStyle="bold"/>
@@ -132,43 +185,16 @@
                     android:layout_marginTop="2dp"/>
             </LinearLayout>
 
-            <!-- Photo card (dark) -->
-            <LinearLayout
-                android:id="@+id/btnPhoto"
-                android:layout_width="0dp" android:layout_height="76dp"
-                android:layout_weight="1"
-                android:layout_marginStart="6dp"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:background="@drawable/card_candy_cam"
-                android:padding="8dp"
-                android:foreground="?attr/selectableItemBackground">
-
-                <ImageView
-                    android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/ic_camera_solid"
-                    app:tint="@color/white"
-                    android:contentDescription="拍照"/>
-
-                <TextView
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="拍照"
-                    android:textColor="@color/white"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="3dp"/>
-            </LinearLayout>
-
         </LinearLayout>
 
-        <!-- ═══ Interval Slider ═══ -->
+        <!-- Interval Slider -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/card_bg"
             android:padding="16dp"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="12dp">
 
             <com.google.android.material.slider.Slider
                 android:id="@+id/sliderInterval"
@@ -179,22 +205,86 @@
                 app:thumbTint="@color/primary"/>
         </LinearLayout>
 
-        <!-- ═══ Start / Stop Button ═══ -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnStartStop"
+        <!-- 3 Action Buttons Row -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:text="开始监控"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:textColor="@color/white"
-            android:backgroundTint="@color/candy_btn_start"
-            app:cornerRadius="14dp"
-            android:stateListAnimator="@null"
-            android:elevation="0dp"
-            android:layout_marginBottom="12dp"/>
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
 
-        <!-- ═══ Bottom Nav Bar ═══ -->
+            <!-- Photo -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPhoto"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="52dp"
+                android:text="拍照"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:backgroundTint="@color/candy_cam"
+                app:cornerRadius="12dp"
+                android:stateListAnimator="@null"
+                android:elevation="0dp"
+                android:layout_marginEnd="4dp"
+                app:icon="@drawable/ic_camera_solid"
+                app:iconGravity="textStart"
+                app:iconTint="@color/white"/>
+
+            <!-- Check Ticket -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCheckTicket"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="52dp"
+                android:text="查告票"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:backgroundTint="@color/candy_cam"
+                app:cornerRadius="12dp"
+                android:stateListAnimator="@null"
+                android:elevation="0dp"
+                android:layout_marginHorizontal="4dp"/>
+        </LinearLayout>
+
+        <!-- 2 Main Toggles Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <!-- Main Monitor -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStartStop"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="52dp"
+                android:text="开启主监控"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:backgroundTint="@color/candy_running"
+                app:cornerRadius="12dp"
+                android:stateListAnimator="@null"
+                android:elevation="0dp"
+                android:layout_marginEnd="6dp"/>
+
+            <!-- Ticket Monitor -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTicketToggle"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="52dp"
+                android:text="开启告票"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:backgroundTint="@color/candy_running"
+                app:cornerRadius="12dp"
+                android:stateListAnimator="@null"
+                android:elevation="0dp"
+                android:layout_marginStart="6dp"/>
+        </LinearLayout>
+
+        <!-- Bottom Nav Bar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -203,7 +293,6 @@
             android:gravity="center_vertical"
             android:paddingVertical="12dp">
 
-            <!-- Settings tab -->
             <LinearLayout
                 android:id="@+id/tabSettings"
                 android:layout_width="0dp" android:layout_height="wrap_content"
@@ -227,7 +316,6 @@
                     android:layout_marginTop="3dp"/>
             </LinearLayout>
 
-            <!-- Help tab -->
             <LinearLayout
                 android:id="@+id/tabHelp"
                 android:layout_width="0dp" android:layout_height="wrap_content"
@@ -258,7 +346,7 @@
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:gravity="center"
-            android:text="🔋 建议关闭电池优化以保持后台运行"
+            android:text="&#128267; 建议关闭电池优化以保持后台运行"
             android:textSize="11sp"
             android:textColor="@color/text_hint"/>
 

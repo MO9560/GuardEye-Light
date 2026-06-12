@@ -23,6 +23,10 @@ object Config {
     private const val KEY_CAPTURE_SOURCE       = "last_capture_source"
     private const val KEY_ALERT_MODE             = "alert_mode"
     private const val KEY_LAST_CAPTURE_PATH = "last_capture_path"
+    private const val KEY_TICKET_ENABLED      = "ticket_enabled"
+    private const val KEY_TICKET_INTERVAL     = "ticket_interval_minutes"
+    private const val KEY_TICKET_PLATES       = "ticket_plates"
+    private const val KEY_TICKET_LAST_RESULT   = "ticket_last_result"
 
     var botToken: String
         get() = prefs.getString(KEY_BOT_TOKEN, "") ?: ""
@@ -83,6 +87,22 @@ object Config {
     var alertMode: String
         get() = prefs.getString(KEY_ALERT_MODE, "photo") ?: "photo"
         set(v) = prefs.edit().putString(KEY_ALERT_MODE, v).apply()
+
+    var ticketEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TICKET_ENABLED, false)
+        set(v) = prefs.edit().putBoolean(KEY_TICKET_ENABLED, v).apply()
+
+    var ticketIntervalMinutes: Int
+        get() = prefs.getInt(KEY_TICKET_INTERVAL, 10).coerceIn(5, 60)
+        set(v) = prefs.edit().putInt(KEY_TICKET_INTERVAL, v.coerceIn(5, 60)).apply()
+
+    var ticketPlates: String
+        get() = prefs.getString(KEY_TICKET_PLATES, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_TICKET_PLATES, v).apply()
+
+    var ticketLastResult: String
+        get() = prefs.getString(KEY_TICKET_LAST_RESULT, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_TICKET_LAST_RESULT, v).apply()
 
     val isConfigured: Boolean
         get() = botToken.isNotBlank() && chatId.isNotBlank()

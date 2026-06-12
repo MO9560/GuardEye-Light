@@ -1,4 +1,4 @@
-﻿package com.guardeye.light
+package com.guardeye.light
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -46,14 +46,7 @@ import java.io.File
 // CameraX landscape-shot EXIF: try 90f first, switch to 270f if inverted
 private const val ROTATE_LANDSCAPE = 270f   // 横拍旋转角度：90f 或 270f
 
-// ── Intent actions (top-level for easy cross-class access) ─────────────────
-const val ACTION_CAPTURE          = "com.guardeye.light.ACTION_CAPTURE"
-const val ACTION_MANUAL_CAPTURE   = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
-const val ACTION_STOP             = "com.guardeye.light.ACTION_STOP"
-const val ACTION_REQUEST_BATTERY  = "com.guardeye.light.ACTION_REQUEST_BATTERY"
-const val ACTION_CAPTURE_UPDATED   = "com.guardeye.light.ACTION_CAPTURE_UPDATED"
-const val ACTION_PREVIEW_FRONT    = "com.guardeye.light.ACTION_PREVIEW_FRONT"
-
+//  Intent actions
 // ── Photo quality tiers ─────────────────────────────────────────────────────
 // H/M/L/X: post-processing rescales to target size
 // X: original — no resize, no recompress
@@ -101,6 +94,17 @@ object PhotoQuality {
  *  5. Notification IMPORTANCE_HIGH — less likely to be killed by system
  */
 class LightBotService : LifecycleService() {
+
+    companion object {
+        const val ACTION_CAPTURE         = "com.guardeye.light.ACTION_CAPTURE"
+        const val ACTION_MANUAL_CAPTURE  = "com.guardeye.light.ACTION_MANUAL_CAPTURE"
+        const val ACTION_STOP            = "com.guardeye.light.ACTION_STOP"
+        const val ACTION_REQUEST_BATTERY  = "com.guardeye.light.ACTION_REQUEST_BATTERY"
+        const val ACTION_CAPTURE_UPDATED  = "com.guardeye.light.ACTION_CAPTURE_UPDATED"
+        const val ACTION_PREVIEW_FRONT    = "com.guardeye.light.ACTION_PREVIEW_FRONT"
+        const val ACTION_CHECK_TICKET     = "com.guardeye.light.ACTION_CHECK_TICKET"
+        private const val TAG = "LightBotService"
+    }
 
     // ── CameraX — bound once, reused for all captures ─────────────────
     private var cameraProvider: ProcessCameraProvider? = null
@@ -229,6 +233,13 @@ class LightBotService : LifecycleService() {
             }
             ACTION_REQUEST_BATTERY -> {
                 requestIgnoreBatteryOptimizations()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            ACTION_CHECK_TICKET -> {
+                cmdScope.launch(Dispatchers.Main) {
+                    TicketChecker.checkAndPush()
+                }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -413,6 +424,17 @@ class LightBotService : LifecycleService() {
             }
             text == "/test" -> {
                 TelegramBot.sendText(token, chatId, "[GuardEye Light 正常运行] 版本：${BuildConfig.VERSION_NAME}")
+            }
+            text == "/ticket" -> {
+                val plates = TicketChecker.parsePlates(Config.ticketPlates)
+                if (plates.isEmpty()) {
+                    TelegramBot.sendText(token, chatId, "[告票查询] 未配置车牌列表，请在设置中添加")
+                } else {
+                    TelegramBot.sendText(token, chatId, "[正在查询告票...请稍候]")
+                    cmdScope.launch(Dispatchers.Main) {
+                        TicketChecker.checkAndPush()
+                    }
+                }
             }
         }
     }
@@ -903,9 +925,6 @@ class LightBotService : LifecycleService() {
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .build()
 
-    companion object {
-        private const val TAG = "LightBotService"
-    }
 }
 
 /**
