@@ -27,7 +27,6 @@ object TicketChecker {
     private const val URL = "https://www.fsm.gov.mo/webticket/Webform1.aspx?carClass=L&Lang=C"
 
     private val RE_VIEWSTATE = Regex("""id="__VIEWSTATE"[^>]*\svalue="([^"]*)"""", RegexOption.IGNORE_CASE)
-    private val RE_VIEWSTATEGENERATOR = Regex("""id="__VIEWSTATEGENERATOR"[^>]*\svalue="([^"]*)"""", RegexOption.IGNORE_CASE)
     private val RE_EVENTVALIDATION = Regex("""id="__EVENTVALIDATION"[^>]*\svalue="([^"]*)"""", RegexOption.IGNORE_CASE)
     private val RE_PLATE = Regex("""id="lbGetNum"[^>]*>([^<]+)<""")
     private val RE_MSG = Regex("""id="lbMsgText"[^>]*>([^<]+)<""")
@@ -94,13 +93,13 @@ object TicketChecker {
         getResp.close()
 
         val vs = RE_VIEWSTATE.find(html0)?.groupValues?.get(1) ?: ""
-        val vsg = RE_VIEWSTATEGENERATOR.find(html0)?.groupValues?.get(1) ?: ""
         val ev = RE_EVENTVALIDATION.find(html0)?.groupValues?.get(1) ?: ""
 
-        // Step 2: POST 提交车牌，使用同一个 Session 的 ViewState 和 Cookie
+        // Step 2: POST 提交车牌，格式完全对齐 traffic_ticket_query.js
         val pairs = listOf(
+            "__EVENTTARGET" to "",
+            "__EVENTARGUMENT" to "",
             "__VIEWSTATE" to vs,
-            "__VIEWSTATEGENERATOR" to vsg,
             "__EVENTVALIDATION" to ev,
             "Calculator" to plate,
             "btnOk" to BTN_OK
