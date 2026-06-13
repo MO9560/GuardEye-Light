@@ -267,6 +267,9 @@ class LightBotService : LifecycleService() {
     private fun startPolling() {
         pollingJob?.cancel()
         pollingJob = cmdScope.launch {
+            var retryDelay = 10_000L
+            val maxRetryDelay = 5 * 60 * 1_000L
+
             while (true) {
                 try {
                     val token = Config.botToken
@@ -284,11 +287,16 @@ class LightBotService : LifecycleService() {
                             }
                         }
                     }
+                    // 成功：重置退避延迟
+                    retryDelay = 10_000L
+
                     val waitMs = if (result.getOrNull()?.isEmpty() != false) 1_500L else 500L
                     delay(waitMs)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Polling error", e)
-                    delay(10_000L)
+                    Log.e(TAG, "Polling error, retrying in ${retryDelay}ms", e)
+                    delay(retryDelay)
+                    // 指数退避：翻倍，上限 5 分钟
+                    retryDelay = (retryDelay * 2).coerceAtMost(maxRetryDelay)
                 }
             }
         }
@@ -297,7 +305,7 @@ class LightBotService : LifecycleService() {
     private fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
-        // WakeLock released by stopKeepAlive(); don't release here (camera capture needs it)
+        // WakeLock 由 onDestroy() 统一释放，此处不释放
     }
 
     // ── WakeLock keep-alive: re-acquire before each 10-min window expires ──────
