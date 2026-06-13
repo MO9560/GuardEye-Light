@@ -162,24 +162,28 @@ object TicketChecker {
     }
 
     private fun pushToTelegram(results: List<TicketResult>) {
-        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("Asia/Macau")
-        }.format(Date())
-        
-        val msgLines = results.map { r ->
+        }.format(java.util.Date())
+
+        val lines = mutableListOf<String>()
+        lines.add(time)
+
+        for (r in results) {
             val iconNow = if (r.hasTicket) "📛" else "✅"
             val iconLast = when (r.lastHasTicket) {
                 true -> "📛"
                 false -> "✅"
-                null -> ""  // 首次查询，无上次状态
+                null -> ""
             }
             val plate = r.plateNumber ?: r.plate
             val statusText = if (r.hasTicket) "有違例紀錄" else "無違例紀錄"
-            "$time\n$plate，$statusText $iconLast$iconNow"
+            val line = "$plate，$statusText$iconLast$iconNow"
+            lines.add(line)
         }
-        
-        val text = msgLines.joinToString("\n")
-        
+
+        val text = lines.joinToString("\n")
+
         val token = Config.botToken
         val chatId = Config.chatId
         if (token.isNotBlank() && chatId.isNotBlank()) {
