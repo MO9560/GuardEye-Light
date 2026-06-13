@@ -30,11 +30,11 @@ object Config {
 
     var botToken: String
         get() = prefs.getString(KEY_BOT_TOKEN, "") ?: ""
-        set(v) = prefs.edit().putString(KEY_BOT_TOKEN, v).commit()
+        set(v) { prefs.edit().putString(KEY_BOT_TOKEN, v).commit() }
 
     var chatId: String
         get() = prefs.getString(KEY_CHAT_ID, "") ?: ""
-        set(v) = prefs.edit().putString(KEY_CHAT_ID, v).commit()
+        set(v) { prefs.edit().putString(KEY_CHAT_ID, v).commit() }
 
     var intervalMinutes: Int
         get() = prefs.getInt(KEY_INTERVAL, 5).coerceIn(1, 60)
@@ -42,7 +42,7 @@ object Config {
 
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
-        set(v) = prefs.edit().putBoolean(KEY_ENABLED, v).commit()
+        set(v) { prefs.edit().putBoolean(KEY_ENABLED, v).commit() }
 
     var detectionEnabled: Boolean
         get() = prefs.getBoolean(KEY_DETECTION, true)
@@ -58,7 +58,7 @@ object Config {
 
     var botOffset: Long
         get() = prefs.getLong(KEY_OFFSET, 0L)
-        set(v) = prefs.edit().putLong(KEY_OFFSET, v).commit()
+        set(v) { prefs.edit().putLong(KEY_OFFSET, v).commit() }
 
     var lastIntervalCapture: Long
         get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE, 0L)
