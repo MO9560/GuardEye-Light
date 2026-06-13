@@ -1,23 +1,37 @@
-﻿package com.guardeye.light
+package com.guardeye.light
 
 import android.os.Bundle
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
-import android.view.LayoutInflater
-import android.widget.Toast
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup.LayoutParams.*
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.guardeye.Config
 import com.guardeye.R
 import com.guardeye.databinding.LightActivitySettingsBinding
-import com.guardeye.databinding.TabBasicBinding
-import com.guardeye.databinding.TabTicketBinding
-import com.google.android.material.tabs.TabLayout
 
 class LightSettingsActivity : AppCompatActivity() {
 
     private lateinit var ui: LightActivitySettingsBinding
-    private lateinit var basicBinding: TabBasicBinding
-    private lateinit var ticketBinding: TabTicketBinding
+
+    // Tab content containers
+    private lateinit var basicView: View
+    private lateinit var ticketView: View
+
+    // Basic tab views
+    private lateinit var editToken: EditText
+    private lateinit var editChatId: EditText
+    private lateinit var btnToggleToken: ImageButton
+    private lateinit var btnSaveBasic: Button
+
+    // Ticket tab views
+    private lateinit var switchTicket: Switch
+    private lateinit var editPlates: EditText
+    private lateinit var btnSaveTicket: Button
+    private val intervalBtns = mutableMapOf<Int, Button>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,60 +39,240 @@ class LightSettingsActivity : AppCompatActivity() {
         ui = LightActivitySettingsBinding.inflate(layoutInflater)
         setContentView(ui.root)
 
-        // Inflate tab contents
-        basicBinding = TabBasicBinding.inflate(layoutInflater)
-        ticketBinding = TabTicketBinding.inflate(layoutInflater)
+        basicView = createBasicTab()
+        ticketView = createTicketTab()
 
         setupTabs()
         loadConfig()
         setupListeners()
     }
 
+    private fun createBasicTab(): View {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        val ctx = this
+
+        // Token card
+        val tokenCard = createCard(ctx).apply {
+            addView(TextView(ctx).apply {
+                text = "Bot Token"
+                setTextAppearance(android.R.style.TextAppearance_Medium)
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            })
+        }
+        val tokenRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+        }
+        editToken = EditText(ctx).apply {
+            hint = "输入 Telegram Bot Token"
+            inputType = (android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
+            isSingleLine = true
+            setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary)))
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        btnToggleToken = ImageButton(ctx).apply {
+            setImageResource(R.drawable.ic_eye_outline)
+            background = ContextCompat.getDrawable(ctx, R.drawable.btn_icon_circle)
+            setColorFilter(ContextCompat.getColor(ctx, R.color.text_hint))
+            contentDescription = "显隐"
+            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginStart = dp(8) }
+        }
+        tokenRow.addView(editToken); tokenRow.addView(btnToggleToken)
+        tokenCard.addView(tokenRow); container.addView(tokenCard)
+
+        // Chat ID card
+        val chatCard = createCard(ctx).apply {
+            addView(TextView(ctx).apply {
+                text = "Chat ID"
+                setTextAppearance(android.R.style.TextAppearance_Medium)
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            })
+        }
+        editChatId = EditText(ctx).apply {
+            hint = "输入 Chat ID"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            isSingleLine = true
+            setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary)))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+        }
+        chatCard.addView(editChatId); container.addView(chatCard)
+
+        // Save button
+        btnSaveBasic = Button(ctx).apply {
+            text = "保存设置"
+            setTextColor(ContextCompat.getColor(ctx, R.color.white))
+            setBackgroundColor(ContextCompat.getColor(ctx, R.color.primary))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(6) }
+        }
+        container.addView(btnSaveBasic)
+
+        return container
+    }
+
+    private fun createTicketTab(): View {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        val ctx = this
+
+        // Enable switch card
+        val enableCard = createCard(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        enableCard.addView(TextView(ctx).apply {
+            text = "告票监控"
+            setTextAppearance(android.R.style.TextAppearance_Medium)
+            setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        })
+        switchTicket = Switch(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
+        }
+        enableCard.addView(switchTicket)
+        container.addView(enableCard)
+
+        // Interval card
+        val intervalCard = createCard(ctx).apply {
+            addView(TextView(ctx).apply {
+                text = "查询间隔"
+                setTextAppearance(android.R.style.TextAppearance_Medium)
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            })
+            addView(TextView(ctx).apply {
+                text = "告票监控自动查询的时间间隔"
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_hint))
+                textSize = 11f
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(2) }
+            })
+        }
+        val row1 = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }
+        }
+        val row2 = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
+        }
+        val intervals = listOf(5 to "5分钟", 10 to "10分钟", 15 to "15分钟", 20 to "20分钟", 30 to "30分钟")
+        intervals.forEachIndexed { i, (mins, label) ->
+            val btn = Button(ctx).apply {
+                text = label; tag = mins
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+                setBackgroundColor(ContextCompat.getColor(ctx, android.R.color.transparent))
+                layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+                    if (i % 3 != 2) marginEnd = dp(6)
+                }
+                intervalBtns[mins] = this
+            }
+            if (i < 3) row1.addView(btn) else row2.addView(btn)
+        }
+        // Row 2 spacer
+        row2.addView(View(ctx).apply { layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f) })
+        intervalCard.addView(row1); intervalCard.addView(row2)
+        container.addView(intervalCard)
+
+        // Plate list card
+        val plateCard = createCard(ctx).apply {
+            addView(TextView(ctx).apply {
+                text = "车牌列表"
+                setTextAppearance(android.R.style.TextAppearance_Medium)
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            })
+            addView(TextView(ctx).apply {
+                text = "每行一个，如 MO2541（2大写字母+4位数字）"
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_hint)); textSize = 11f
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(2) }
+            })
+        }
+        editPlates = EditText(ctx).apply {
+            hint = "MO2541\nAX4521\nMT9200"
+            minLines = 5; gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary)))
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(120)).apply { topMargin = dp(8) }
+        }
+        plateCard.addView(editPlates); container.addView(plateCard)
+
+        // Save button
+        btnSaveTicket = Button(ctx).apply {
+            text = "保存告票设置"
+            setTextColor(ContextCompat.getColor(ctx, R.color.white))
+            setBackgroundColor(ContextCompat.getColor(ctx, R.color.primary))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(6) }
+        }
+        container.addView(btnSaveTicket)
+
+        return container
+    }
+
+    private fun createCard(ctx: android.content.Context): LinearLayout {
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            background = ContextCompat.getDrawable(ctx, R.drawable.card_bg)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+
     private fun setupTabs() {
         ui.tabLayout.addTab(ui.tabLayout.newTab().setText("基本"))
         ui.tabLayout.addTab(ui.tabLayout.newTab().setText("告票"))
+        ui.tabContent.addView(basicView)
 
-        // Show basic tab by default
-        ui.tabContent.addView(basicBinding.root)
-        updateIntervalButtons()
-
-        ui.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
+        ui.tabLayout.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
                 ui.tabContent.removeAllViews()
                 when (tab.position) {
-                    0 -> ui.tabContent.addView(basicBinding.root)
-                    1 -> ui.tabContent.addView(ticketBinding.root)
+                    0 -> ui.tabContent.addView(basicView)
+                    1 -> ui.tabContent.addView(ticketView)
                 }
             }
-            override fun onTabUnselected(tab: TabLayout.Tab) {}
-            override fun onTabReselected(tab: TabLayout.Tab) {}
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
         })
+
+        updateIntervalButtons()
     }
 
     private fun loadConfig() {
-        basicBinding.editToken.setText(Config.botToken)
-        basicBinding.editChatId.setText(Config.chatId)
-        ticketBinding.editPlates.setText(Config.ticketPlates)
+        editToken.setText(Config.botToken)
+        editChatId.setText(Config.chatId)
+        switchTicket.isChecked = Config.ticketEnabled
+        editPlates.setText(Config.ticketPlates)
         updateIntervalButtons()
     }
 
     private fun setupListeners() {
         ui.btnSettingsBack.setOnClickListener { finish() }
 
-        // Basic tab
-        basicBinding.btnToggleToken.setOnClickListener {
-            if (basicBinding.editToken.transformationMethod is PasswordTransformationMethod) {
-                basicBinding.editToken.transformationMethod = HideReturnsTransformationMethod.getInstance()
-                basicBinding.btnToggleToken.setImageResource(R.drawable.ic_eye_off_outline)
+        btnToggleToken.setOnClickListener {
+            if (editToken.transformationMethod is PasswordTransformationMethod) {
+                editToken.transformationMethod = HideReturnsTransformationMethod.getInstance()
+                btnToggleToken.setImageResource(R.drawable.ic_eye_off_outline)
             } else {
-                basicBinding.editToken.transformationMethod = PasswordTransformationMethod.getInstance()
-                basicBinding.btnToggleToken.setImageResource(R.drawable.ic_eye_outline)
+                editToken.transformationMethod = PasswordTransformationMethod.getInstance()
+                btnToggleToken.setImageResource(R.drawable.ic_eye_outline)
             }
         }
 
-        basicBinding.btnSaveSettings.setOnClickListener {
-            val token = basicBinding.editToken.text.toString().trim()
-            val chatId = basicBinding.editChatId.text.toString().trim()
+        btnSaveBasic.setOnClickListener {
+            val token = editToken.text.toString().trim()
+            val chatId = editChatId.text.toString().trim()
             if (token.isEmpty() || chatId.isEmpty()) {
                 Toast.makeText(this, "Token 和 Chat ID 不能为空", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -88,45 +282,37 @@ class LightSettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "基本设置已保存", Toast.LENGTH_SHORT).show()
         }
 
-        // Ticket tab interval buttons
-        val intervalBtns = listOf(
-            ticketBinding.btnInterval5 to 5,
-            ticketBinding.btnInterval10 to 10,
-            ticketBinding.btnInterval15 to 15,
-            ticketBinding.btnInterval20 to 20,
-            ticketBinding.btnInterval30 to 30
-        )
-        for ((btn, mins) in intervalBtns) {
+        for ((mins, btn) in intervalBtns) {
             btn.setOnClickListener {
                 Config.ticketIntervalMinutes = mins
                 updateIntervalButtons()
             }
         }
 
-        ticketBinding.btnSaveTicket.setOnClickListener {
-            Config.ticketPlates = ticketBinding.editPlates.text.toString().trim()
-            Toast.makeText(this, "告票设置已保存", Toast.LENGTH_SHORT).show()
+        btnSaveTicket.setOnClickListener {
+            val enabled = switchTicket.isChecked
+            Config.ticketEnabled = enabled
+            Config.ticketPlates = editPlates.text.toString().trim()
+            val status = if (enabled) "已开启" else "已关闭"
+            Toast.makeText(this, "告票监控 $status", Toast.LENGTH_SHORT).show()
+            // Schedule or cancel the alarm
+            if (enabled && Config.ticketPlates.isNotBlank()) {
+                LightAlarmReceiverTicket.scheduleAlarm(this, Config.ticketIntervalMinutes)
+            } else {
+                LightAlarmReceiverTicket.cancelAlarm(this)
+            }
         }
     }
 
     private fun updateIntervalButtons() {
         val active = Config.ticketIntervalMinutes
-        val intervalBtns = listOf(
-            ticketBinding.btnInterval5 to 5,
-            ticketBinding.btnInterval10 to 10,
-            ticketBinding.btnInterval15 to 15,
-            ticketBinding.btnInterval20 to 20,
-            ticketBinding.btnInterval30 to 30
-        )
-        for ((btn, mins) in intervalBtns) {
-            if (btn != null) {
-                if (mins == active) {
-                    btn.setBackgroundColor(getColor(R.color.primary))
-                    btn.setTextColor(getColor(R.color.white))
-                } else {
-                    btn.setBackgroundColor(getColor(android.R.color.transparent))
-                    btn.setTextColor(getColor(R.color.text_primary))
-                }
+        for ((mins, btn) in intervalBtns) {
+            if (mins == active) {
+                btn.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))
+                btn.setTextColor(ContextCompat.getColor(this, R.color.white))
+            } else {
+                btn.setBackgroundColor(ContextCompat.getColor(this, android.R.color.transparent))
+                btn.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
             }
         }
     }

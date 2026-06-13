@@ -1,4 +1,4 @@
-﻿package com.guardeye
+package com.guardeye
 
 import android.content.Context
 import android.content.SharedPreferences
