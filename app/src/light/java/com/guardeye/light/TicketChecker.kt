@@ -41,7 +41,7 @@ object TicketChecker {
         withContext(Dispatchers.IO) {
             val plates = parsePlates(Config.ticketPlates)
             if (plates.isEmpty()) return@withContext
-            val lastJson = try { JSONObject(Config.ticketLastResult ?: "{}") } catch (_: Exception) { JSONObject() }
+            val lastJson = try { JSONObject(Config.ticketLastResult) } catch (_: Exception) { JSONObject() }
 
             // Step 1: GET page
             val getReq = Request.Builder().url(URL)
@@ -62,23 +62,19 @@ object TicketChecker {
             val results = mutableListOf<TicketResult>()
             for (plate in plates) {
                 try {
-                    // Each plate gets its own query with fresh hidden fields
                     val r = queryPlate(plate, vs, vsg, ev, cookies)
-                    results.add(r)
+                    // 填入上次状态
+                    val lastState = if (lastJson.has(plate)) lastJson.getBoolean(plate) else null
+                    results.add(r.copy(lastHasTicket = lastState))
                 } catch (e: Exception) {
                     results.add(TicketResult(plate, null, null, false, "查询失败: ${e.message}"))
                 }
             }
 
-            val changed = results.any { r ->
-                val prev = lastJson.optBoolean(r.plate, !r.hasTicket)
-                prev != r.hasTicket
-            }
-            if (changed || results.any { it.hasTicket }) {
-                pushToTelegram(results)
-            }
+            // 每次都推送，不分析变化
+            pushToTelegram(results)
 
-            // Store results regardless
+            // 存本次结果
             val json = JSONObject()
             for (r in results) {
                 json.put(r.plate, r.hasTicket)
@@ -166,24 +162,24 @@ object TicketChecker {
     }
 
     private fun pushToTelegram(results: List<TicketResult>) {
-        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        val header = "[ Macau Traffic Monitor | $time ]"
-        val sep = "--------------------------------"
-
-        val msgLines = results.mapIndexed { i, r ->
-            val flag = if (r.hasTicket) "[NEW]" else "    "
-            val icon = if (r.hasTicket) "[!]" else "[OK]"
+        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Macau")
+        }.format(Date())
+        
+        val msgLines = results.map { r ->
+            val iconNow = if (r.hasTicket) "📛" else "✅"
+            val iconLast = when (r.lastHasTicket) {
+                true -> "📛"
+                false -> "✅"
+                null -> ""  // 首次查询，无上次状态
+            }
             val plate = r.plateNumber ?: r.plate
-            val carInfo = if (r.carType != null) " (${r.carType})" else ""
-            "${i + 1}. $flag $icon ${plate}$carInfo"
+            val statusText = if (r.hasTicket) "有違例紀錄" else "無違例紀錄"
+            "$time\n$plate，$statusText $iconLast$iconNow"
         }
-
-        val body = msgLines.joinToString("\n")
-        val total = results.size
-        val violations = results.count { it.hasTicket }
-        val summary = "[ $total plates | $violations violations ]"
-        val text = "$header\n$sep\n$body\n$sep\n$summary"
-
+        
+        val text = msgLines.joinToString("\n")
+        
         val token = Config.botToken
         val chatId = Config.chatId
         if (token.isNotBlank() && chatId.isNotBlank()) {
@@ -202,6 +198,7 @@ object TicketChecker {
         val plateNumber: String?,
         val carType: String?,
         val hasTicket: Boolean,
-        val message: String
+        val message: String,
+        val lastHasTicket: Boolean? = null  // 上次状态（null=首次查询）
     )
 }
