@@ -1,4 +1,4 @@
-﻿package com.guardeye.light
+package com.guardeye.light
 
 import com.guardeye.Config
 import com.guardeye.TelegramBot
@@ -84,9 +84,7 @@ object TicketChecker {
     }
 
     private fun queryPlate(plate: String, vs: String, vsg: String, ev: String, cookies: String): TicketResult {
-        val normalizedPlate = plate.uppercase().replace(Regex("[- ]"), "")
-
-        // Re-GET page for fresh VIEWSTATE per query
+        // plate 已由 parsePlates() 规范化（去掉横杠、转大写）
         val getReq = Request.Builder().url(URL)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .header("Accept-Language", "zh-CN,zh;q=0.9")
@@ -103,7 +101,7 @@ object TicketChecker {
             "__VIEWSTATE" to freshVs,
             "__VIEWSTATEGENERATOR" to freshVsg,
             "__EVENTVALIDATION" to freshEv,
-            "Calculator" to normalizedPlate,
+            "Calculator" to plate,
             "resW" to "1920",
             "resH" to "1080",
             "btnOk" to BTN_OK
@@ -125,10 +123,10 @@ object TicketChecker {
         val html = postResp.body?.string() ?: throw Exception("Empty POST response")
         postResp.close()
 
-        return parseResponse(html)
+        return parseResponse(html, plate)
     }
 
-    private fun parseResponse(html: String): TicketResult {
+    private fun parseResponse(html: String, plate: String): TicketResult {
         val plateNumber = RE_PLATE.find(html)?.groupValues?.get(1)?.trim()
 
         // Car type from image src or label
@@ -140,20 +138,13 @@ object TicketChecker {
             else -> RE_CAR_TYPE_LABEL.find(html)?.groupValues?.get(1)?.trim() ?: "---"
         }
 
-        // System message
+        // 直接返回 FSM 系统消息，不做判断
         val msgText = RE_MSG.find(html)?.groupValues?.get(1)?.trim() ?: ""
         val hasTicket = msgText.contains("有違例紀錄") || msgText.contains("有违例记录")
-        val noTicket = msgText.contains("沒有違例紀錄") || msgText.contains("沒有違例紀錄") || msgText.contains("沒有違例紀錄")
-
-        val message = when {
-            msgText.isNotBlank() && !msgText.contains("查詢結果") -> msgText
-            hasTicket -> "有違例紀錄"
-            noTicket -> "沒有違例紀錄"
-            else -> "無法解析查詢結果"
-        }
+        val message = if (msgText.isNotBlank()) msgText else "查無資料"
 
         return TicketResult(
-            plate = plateNumber ?: "---",
+            plate = plate,
             plateNumber = plateNumber,
             carType = carType,
             hasTicket = hasTicket,
@@ -162,23 +153,16 @@ object TicketChecker {
     }
 
     private fun pushToTelegram(results: List<TicketResult>) {
-        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).apply {
+        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("Asia/Macau")
-        }.format(java.util.Date())
+        }.format(Date())
 
         val lines = mutableListOf<String>()
         lines.add(time)
 
         for (r in results) {
-            val iconNow = if (r.hasTicket) "📛" else "✅"
-            val iconLast = when (r.lastHasTicket) {
-                true -> "📛"
-                false -> "✅"
-                null -> ""
-            }
-            val plate = r.plateNumber ?: r.plate
-            val statusText = if (r.hasTicket) "有違例紀錄" else "無違例紀錄"
-            val line = "$plate，$statusText$iconLast$iconNow"
+            // 直接输出：车牌，FSM消息
+            val line = "${r.plate}，${r.message}"
             lines.add(line)
         }
 
@@ -192,8 +176,8 @@ object TicketChecker {
     }
 
     fun parsePlates(text: String): List<String> {
-        return text.split(Regex("\\s+"))
-            .map { it.trim().uppercase() }
+        return text.split(Regex("[\\s,;]+"))
+            .map { it.trim().uppercase().replace(Regex("[- ]"), "") }  // 规范化：去掉横杠和空格
             .filter { Regex("^[A-Z]{2}[0-9]{4}$").matches(it) }
     }
 
