@@ -303,7 +303,14 @@ class LightBotService : LifecycleService() {
     // ── WakeLock keep-alive: re-acquire before each 10-min window expires ──────
 
     private fun startKeepAlive() {
-        stopKeepAlive()
+        // 只取消上一个 runnable，不释放 WakeLock，避免短暂缺口
+        keepAliveRunnable?.let { mainHandler.removeCallbacks(it) }
+        keepAliveRunnable = null
+
+        if (!wakeLock.isHeld) {
+            wakeLock.acquire(10 * 60 * 1000L)
+            Log.d(TAG, "WakeLock acquired")
+        }
         keepAliveRunnable = object : Runnable {
             override fun run() {
                 if (!wakeLock.isHeld) {
@@ -313,16 +320,13 @@ class LightBotService : LifecycleService() {
                 mainHandler.postDelayed(this, 8 * 60 * 1000L) // every 8 min
             }
         }
-        keepAliveRunnable?.let { mainHandler.postDelayed(it, 8 * 60 * 1000L) }
+        mainHandler.postDelayed(keepAliveRunnable!!, 8 * 60 * 1000L)
     }
 
     private fun stopKeepAlive() {
+        // 只取消 runnable；不释放 WakeLock，释放统一放在 onDestroy()
         keepAliveRunnable?.let { mainHandler.removeCallbacks(it) }
         keepAliveRunnable = null
-        // Release WakeLock only when service is truly shutting down
-        if (wakeLock.isHeld) {
-            try { wakeLock.release() } catch (_: Exception) {}
-        }
     }
 
     // ── Battery Optimization whitelist ─────────────────────────────────────────

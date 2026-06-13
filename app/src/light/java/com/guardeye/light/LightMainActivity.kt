@@ -18,6 +18,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.guardeye.Config
 import com.guardeye.R
 import com.guardeye.databinding.LightActivityMainBinding
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class LightMainActivity : AppCompatActivity() {
@@ -99,11 +101,14 @@ class LightMainActivity : AppCompatActivity() {
 
     private fun loadLastCaptureImage() {
         val path = Config.lastCapturePath
-        if (path != null && File(path).exists()) {
-            try {
-                val bm = android.graphics.BitmapFactory.decodeFile(path)
+        if (path == null || !File(path).exists()) return
+
+        // IO 线程解码，Main 线程更新 UI
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bm = android.graphics.BitmapFactory.decodeFile(path)
+            withContext(Dispatchers.Main) {
                 if (bm != null) ui.imageLastCapture.setImageBitmap(bm)
-            } catch (_: Exception) {}
+            }
         }
     }
 
