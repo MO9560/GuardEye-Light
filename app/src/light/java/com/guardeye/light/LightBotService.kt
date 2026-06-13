@@ -137,14 +137,12 @@ class LightBotService : LifecycleService() {
     private var keepAliveRunnable: Runnable? = null
 
     // ── Foreground notification ─────────────────────────────────────
-    private val CHANNEL_ID = "guardeye_light_bot"
     private val NOTIF_ID = 2001
 
     // ─────────────────────────────────────────────────────────────────
     override fun onCreate() {
         super.onCreate()
         Config.init(this)
-        createNotificationChannel()
 
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
@@ -916,19 +914,7 @@ class LightBotService : LifecycleService() {
 
     // ── Notification ──────────────────────────────────────────────────────────
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // IMPORTANCE_HIGH → heads-up notification on Android 7+
-            // System is less aggressive about killing high-priority foreground services
-            val ch = NotificationChannel(CHANNEL_ID, "GuardEye Light", NotificationManager.IMPORTANCE_HIGH)
-            ch.setShowBadge(false)
-            ch.setDescription("保持 GuardEye Light 在后台运行")
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(ch)
-        }
-    }
-
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification() = NotificationCompat.Builder(this, com.guardeye.GuardEyeApplication.CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_camera)
         .setContentTitle("[GuardEye Light] 监控中")
         .setContentText(if (Config.enabled) "定时拍照 · ${Config.intervalMinutes}分钟/次" else "已停止")
