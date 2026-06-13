@@ -124,6 +124,8 @@ object TicketChecker {
         return parseResponse(html, plate)
     }
 
+    private val RE_NO_TICKET2 = Regex("""id="lbNoTicket2"[^>]*>([^<]+)<""", RegexOption.IGNORE_CASE)
+
     private fun parseResponse(html: String, plate: String): TicketResult {
         val plateNumber = RE_PLATE.find(html)?.groupValues?.get(1)?.trim()
 
@@ -136,16 +138,36 @@ object TicketChecker {
             else -> RE_CAR_TYPE_LABEL.find(html)?.groupValues?.get(1)?.trim() ?: "---"
         }
 
-        // 直接返回 FSM 系统消息，不做判断
+        // 对齐 traffic_ticket_query.js 的 parseResult() 逻辑（三层检查）
+        // 第1层：lbMsgText（系统消息，如「輸入的車牌編號沒有登記」）
         val msgText = RE_MSG.find(html)?.groupValues?.get(1)?.trim() ?: ""
-        val hasTicket = msgText.contains("有違例紀錄") || msgText.contains("有违例记录")
-        val message = if (msgText.isNotBlank()) msgText else "查無資料"
+
+        // 第2层：lbNoTicket2（「沒有違例紀錄」在这里）
+        val noTicket2 = RE_NO_TICKET2.find(html)?.groupValues?.get(1)?.trim() ?: ""
+
+        // 第3层：indexOf 兜底
+        val hasTicket = html.contains("有違例紀錄") || html.contains("有违例记录")
+        val hasNoTicket = html.contains("沒有違例紀錄")
+
+        val message = when {
+            msgText.isNotBlank() -> msgText
+            noTicket2.contains("沒有違例紀錄") -> "沒有違例紀錄"
+            hasNoTicket -> "沒有違例紀錄"
+            hasTicket -> "有違例紀錄"
+            else -> "查無資料"
+        }
+
+        val finalHasTicket = when {
+            message.contains("有違例紀錄") -> true
+            message.contains("沒有違例紀錄") -> false
+            else -> hasTicket
+        }
 
         return TicketResult(
             plate = plate,
             plateNumber = plateNumber,
             carType = carType,
-            hasTicket = hasTicket,
+            hasTicket = finalHasTicket,
             message = message
         )
     }
