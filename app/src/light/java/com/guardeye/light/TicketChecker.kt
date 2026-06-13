@@ -34,8 +34,8 @@ object TicketChecker {
     private val RE_CAR_TYPE_IMG = Regex("""id="ImgCarType"[^>]*\bsrc="([^"]+)"""", RegexOption.IGNORE_CASE)
     private val RE_CAR_TYPE_LABEL = Regex("""id="Label2"[^>]*>([^<]+)<""")
 
-    // 正确的按钮文字（注意有空格）
-    private const val BTN_OK = "確  定"
+    // 正确的按钮文字（无空格，与 FSM 网页一致）
+    private const val BTN_OK = "確定"
 
     suspend fun checkAndPush() {
         withContext(Dispatchers.IO) {
@@ -50,19 +50,15 @@ object TicketChecker {
                 .header("Accept-Language", "zh-CN,zh;q=0.9")
                 .build()
             val getResp = client.newCall(getReq).execute()
-            val html0 = getResp.body?.string() ?: throw Exception("Empty GET response")
             val cookies = getResp.headers("set-cookie")
                 .joinToString("; ") { it.substringBefore(";") }
             getResp.close()
 
-            val vs = RE_VIEWSTATE.find(html0)?.groupValues?.get(1) ?: ""
-            val vsg = RE_VIEWSTATEGENERATOR.find(html0)?.groupValues?.get(1) ?: ""
-            val ev = RE_EVENTVALIDATION.find(html0)?.groupValues?.get(1) ?: ""
-
             val results = mutableListOf<TicketResult>()
             for (plate in plates) {
                 try {
-                    val r = queryPlate(plate, vs, vsg, ev, cookies)
+                    // 每个车牌独立发起 GET + POST，保证 Session 一致
+                    val r = queryPlate(plate, cookies)
                     // 填入上次状态
                     val lastState = if (lastJson.has(plate)) lastJson.getBoolean(plate) else null
                     results.add(r.copy(lastHasTicket = lastState))
@@ -83,27 +79,30 @@ object TicketChecker {
         }
     }
 
-    private fun queryPlate(plate: String, vs: String, vsg: String, ev: String, cookies: String): TicketResult {
-        // plate 已由 parsePlates() 规范化（去掉横杠、转大写）
+    private fun queryPlate(plate: String, cookies: String): TicketResult {
+        // Step 1: GET 页面，带 Cookie，获取本 Session 的 ViewState
         val getReq = Request.Builder().url(URL)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .header("Accept-Language", "zh-CN,zh;q=0.9")
+            .header("Cookie", cookies)
             .build()
         val getResp = client.newCall(getReq).execute()
         val html0 = getResp.body?.string() ?: throw Exception("Empty GET response")
+        // 更新 Cookie（服务器可能返回新的 Set-Cookie）
+        val newCookies = getResp.headers("set-cookie")
+            .joinToString("; ") { it.substringBefore(";") }
         getResp.close()
 
-        val freshVs = RE_VIEWSTATE.find(html0)?.groupValues?.get(1) ?: ""
-        val freshVsg = RE_VIEWSTATEGENERATOR.find(html0)?.groupValues?.get(1) ?: ""
-        val freshEv = RE_EVENTVALIDATION.find(html0)?.groupValues?.get(1) ?: ""
+        val vs = RE_VIEWSTATE.find(html0)?.groupValues?.get(1) ?: ""
+        val vsg = RE_VIEWSTATEGENERATOR.find(html0)?.groupValues?.get(1) ?: ""
+        val ev = RE_EVENTVALIDATION.find(html0)?.groupValues?.get(1) ?: ""
 
+        // Step 2: POST 提交车牌，使用同一个 Session 的 ViewState 和 Cookie
         val pairs = listOf(
-            "__VIEWSTATE" to freshVs,
-            "__VIEWSTATEGENERATOR" to freshVsg,
-            "__EVENTVALIDATION" to freshEv,
+            "__VIEWSTATE" to vs,
+            "__VIEWSTATEGENERATOR" to vsg,
+            "__EVENTVALIDATION" to ev,
             "Calculator" to plate,
-            "resW" to "1920",
-            "resH" to "1080",
             "btnOk" to BTN_OK
         )
         val postBody = pairs.joinToString("&") { (k, v) ->
@@ -116,7 +115,7 @@ object TicketChecker {
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("Referer", URL)
-            .header("Cookie", cookies)
+            .header("Cookie", if (newCookies.isNotBlank()) newCookies else cookies)
             .build()
 
         val postResp = client.newCall(postReq).execute()
