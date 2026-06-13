@@ -1,4 +1,4 @@
-package com.guardeye.light
+﻿package com.guardeye.light
 
 import com.guardeye.Config
 import com.guardeye.TelegramBot
@@ -142,8 +142,8 @@ object TicketChecker {
 
         // System message
         val msgText = RE_MSG.find(html)?.groupValues?.get(1)?.trim() ?: ""
-        val hasTicket = html.contains("有違例紀錄") || html.contains("有违例记录")
-        val noTicket = html.contains("沒有違例紀錄") || html.contains("没有违例纪录")
+        val hasTicket = msgText.contains("有違例紀錄") || msgText.contains("有违例记录")
+        val noTicket = msgText.contains("沒有違例紀錄") || msgText.contains("沒有違例紀錄") || msgText.contains("沒有違例紀錄")
 
         val message = when {
             msgText.isNotBlank() && !msgText.contains("查詢結果") -> msgText
