@@ -35,12 +35,13 @@ object TicketChecker {
     // 按钮文字（与 FSM 网页一致，无空格）
     private const val BTN_OK = "確定"
 
-    // 正则：匹配 <input name="xxx" value="yyy">（FSM 隐藏字段用 name=）
+    // 正则：提取 FSM 页面隐藏字段（GET 响应）
     private val RE_VIEWSTATE       = Regex("""name="__VIEWSTATE"[^>]*value="([^"]*)"""", RegexOption.IGNORE_CASE)
     private val RE_EVENTVALIDATION = Regex("""name="__EVENTVALIDATION"[^>]*value="([^"]*)"""", RegexOption.IGNORE_CASE)
-    // 正则：匹配查询结果里的 id= 元素
+    // 正则：匹配 FSM 响应 HTML 中的关键元素（用于日志）
     private val RE_MSG              = Regex("""id="lbMsgText"[^>]*>([^<]*)<""", RegexOption.IGNORE_CASE)
-    private val RE_NO_TICKET        = Regex("""id="lbNoTicket2"[^>]*>([^<]*)<""", RegexOption.IGNORE_CASE)
+    private val RE_NO_TICKET      = Regex("""id="lbNoTicket2"[^>]*>([^<]*)<""", RegexOption.IGNORE_CASE)
+    // 正则：匹配 FSM 响应 HTML 中的车牌/车型
     private val RE_PLATE            = Regex("""id="lbGetNum"[^>]*>([^<]*)<""")
     private val RE_CAR_IMG         = Regex("""id="ImgCarType"[^>]*\bsrc="([^"]+)""", RegexOption.IGNORE_CASE)
     private val RE_CAR_LABEL       = Regex("""id="Label2"[^>]*>([^<]*)<""")
@@ -191,23 +192,31 @@ object TicketChecker {
         }
 
         // 三层检查（对齐 Node.js parseResult）
-        val msgText   = RE_MSG.find(html)?.groupValues?.get(1)?.trim() ?: ""
-        val noTicket2 = RE_NO_TICKET.find(html)?.groupValues?.get(1)?.trim() ?: ""
+        // 第1层：lbMsgText（系统消息，如「輸入的車牌編號沒有登記」）
+        val msgText = extractTagContent(html, "lbMsgText")
+
+        // 第2层：lbNoTicket2（「沒有違例紀錄」在这里）
+        val noTicket2 = extractTagContent(html, "lbNoTicket2")
+
+        // 第3层：直接搜索 HTML（兜底）
+        val hasTicketHtml = html.contains("有違例紀錄") || html.contains("有违例记录")
+        val hasNoTicketHtml = html.contains("沒有違例紀錄")
 
         val message = when {
-            msgText.isNotBlank() && msgText != "null" -> msgText
-            noTicket2.contains("沒有違例紀錄")           -> "沒有違例紀錄"
-            html.contains("沒有違例紀錄")                -> "沒有違例紀錄"
-            html.contains("有違例紀錄") || html.contains("有违例记录") -> "有違例紀錄"
-            else                                               -> "查無資料"
+            msgText.isNotBlank()  -> msgText
+            noTicket2.isNotBlank() -> noTicket2
+            hasNoTicketHtml        -> "沒有違例紀錄"
+            hasTicketHtml          -> "有違例紀錄"
+            else                   -> "查無資料"
         }
 
         val hasTicket = when {
             message.contains("有違例紀錄") -> true
             message.contains("沒有違例紀錄") -> false
-            else                              -> html.contains("有違例紀錄") || html.contains("有违例记录")
+            else                              -> hasTicketHtml
         }
 
+        Log.d(TAG, "[$plate] parseResponse: msgText='$msgText', noTicket2='$noTicket2', message='$message', hasTicket=$hasTicket")
         return TicketResult(
             plate       = plate,
             plateNumber = plateNumber,
@@ -215,6 +224,21 @@ object TicketChecker {
             hasTicket   = hasTicket,
             message     = message
         )
+    }
+
+    // 从 HTML 中提取 id=tagId 的标签内容（健壮方式，处理换行/空格）
+    private fun extractTagContent(html: String, tagId: String): String {
+        // 方式1：<span id="lbMsgText">內容</span>（同一行）
+        val pattern1 = Regex("""<[^>]+id="$tagId"[^>]*>([^<]*)<""", RegexOption.IGNORE_CASE)
+        val m1 = pattern1.find(html)
+        if (m1 != null) return m1.groupValues[1].trim()
+
+        // 方式2：跨行 <span id="lbMsgText">\n內容\n</span>
+        val pattern2 = Regex("""id="$tagId"[^>]*>([\s\S]*?)</""", RegexOption.IGNORE_CASE)
+        val m2 = pattern2.find(html)
+        if (m2 != null) return m2.groupValues[1].trim().replace(Regex("""\s+"""), " ")
+
+        return ""
     }
 
     // ── 推送到 Telegram ──────────────────────────────────────────

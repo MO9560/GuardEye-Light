@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.3.5] - 2026-06-14
+
+### Fixed
+- **TicketChecker.kt**：修复 `parseResponse()` 解析 FSM 响应失败，导致所有车牌都显示有违章（🟴🟴）
+  - 原因：`RE_MSG`/`RE_NO_TICKET` 正则无法匹配跨行 HTML 内容
+  - 修复：新增 `extractTagContent()` 函数，支持跨行匹配 `id=xxx` 标签内容
+  - `parseResponse()` 三层检查改为调用 `extractTagContent()`，更健壮
+  - 新增 `parseResponse()` 内日志，方便调试
+
+---
+
 ## [2.3.4] - 2026-06-14
 
 ### Changed
