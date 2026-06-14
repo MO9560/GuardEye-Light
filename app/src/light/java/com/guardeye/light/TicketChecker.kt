@@ -217,7 +217,9 @@ object TicketChecker {
         )
     }
 
-    // ── 推送到 Telegram ───────────────────────────────────────────
+    // ── 推送到 Telegram ──────────────────────────────────────────
+    // 方案 C 极简格式：🟢=无违章  🔴=有违章
+    // 输出：MO9560 🟢🔴  （上次🟢 本次🔴）
     private fun pushToTelegram(results: List<TicketResult>) {
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("Asia/Macau")
@@ -225,10 +227,23 @@ object TicketChecker {
 
         val lines = mutableListOf<String>().apply { add(time) }
         for (r in results) {
-            lines.add("${r.plate}，${r.message}")
+            // 查询失败时直接输出错误信息
+            if (r.message.startsWith("查询失败") || r.message == "查無資料") {
+                lines.add("${r.plate}，${r.message}")
+                continue
+            }
+            val sb = StringBuilder(r.plate).append(" ")
+            // 上次图标（首次查询无上次记录，跳过）
+            if (r.lastHasTicket != null) {
+                sb.append(if (r.lastHasTicket == true) "🔴" else "🟢")
+            }
+            // 本次图标
+            sb.append(if (r.hasTicket) "🔴" else "🟢")
+            lines.add(sb.toString())
         }
 
         val text = lines.joinToString("\n")
+        Log.d(TAG, "pushToTelegram:\n$text")
         val token = Config.botToken
         val chatId = Config.chatId
         if (token.isNotBlank() && chatId.isNotBlank()) {
