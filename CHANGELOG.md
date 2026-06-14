@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.4] - 2026-06-14
+
+### Changed
+- **主界面 `light_activity_main.xml`**：移除右上角 `badgeTicket`（告票间隔状态），卡片 `cardTicket` 已显示相同信息
+- **主界面 `LightMainActivity.kt`**：`cardTicket` 运行中时显示 `运行中 ${interval}分`（如 `运行中 10分`）
+- **设置页 `LightSettingsActivity.kt`**：Tab 分页改为 `告票 | TG机器人`（原 `基本 | 告票`，换序+改名）
+- **设置页 `LightSettingsActivity.kt`**：告票 Tab 移除 `switchTicketMonitor` 开关（主界面按钮已控制）
+- **设置页 `LightSettingsActivity.kt`**：保存告票设置时不再保存 `ticketEnabled` 状态（由主界面控制）
+- **设置页 `LightSettingsActivity.kt`**：`createBasicTab()` 重命名为 `createTgTab()`，按钮文案更新为 `TG机器人设置已保存`
+
+---
+
 ## [2.3.3] - 2026-06-14
 
 ### Changed

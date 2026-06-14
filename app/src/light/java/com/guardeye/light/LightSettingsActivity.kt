@@ -18,17 +18,16 @@ class LightSettingsActivity : AppCompatActivity() {
     private lateinit var ui: LightActivitySettingsBinding
 
     // Tab content containers
-    private lateinit var basicView: View
     private lateinit var ticketView: View
+    private lateinit var tgView: View
 
-    // Basic tab views
+    // TG robot tab views
     private lateinit var editToken: EditText
     private lateinit var editChatId: EditText
     private lateinit var btnToggleToken: ImageButton
-    private lateinit var btnSaveBasic: Button
+    private lateinit var btnSaveTg: Button
 
     // Ticket tab views
-    private lateinit var switchTicket: Switch
     private lateinit var editPlates: EditText
     private lateinit var btnSaveTicket: Button
     private val intervalBtns = mutableMapOf<Int, Button>()
@@ -39,15 +38,15 @@ class LightSettingsActivity : AppCompatActivity() {
         ui = LightActivitySettingsBinding.inflate(layoutInflater)
         setContentView(ui.root)
 
-        basicView = createBasicTab()
         ticketView = createTicketTab()
+        tgView = createTgTab()
 
         setupTabs()
         loadConfig()
         setupListeners()
     }
 
-    private fun createBasicTab(): View {
+    private fun createTgTab(): View {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(16))
@@ -103,13 +102,13 @@ class LightSettingsActivity : AppCompatActivity() {
         chatCard.addView(editChatId); container.addView(chatCard)
 
         // Save button
-        btnSaveBasic = Button(ctx).apply {
+        btnSaveTg = Button(ctx).apply {
             text = "保存设置"
             setTextColor(ContextCompat.getColor(ctx, R.color.white))
             setBackgroundColor(ContextCompat.getColor(ctx, R.color.primary))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(6) }
         }
-        container.addView(btnSaveBasic)
+        container.addView(btnSaveTg)
 
         return container
     }
@@ -121,23 +120,6 @@ class LightSettingsActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
         }
         val ctx = this
-
-        // Enable switch card
-        val enableCard = createCard(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        enableCard.addView(TextView(ctx).apply {
-            text = "告票监控"
-            setTextAppearance(android.R.style.TextAppearance_Medium)
-            setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-        })
-        switchTicket = Switch(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
-        }
-        enableCard.addView(switchTicket)
-        container.addView(enableCard)
 
         // Interval card
         val intervalCard = createCard(ctx).apply {
@@ -230,16 +212,16 @@ class LightSettingsActivity : AppCompatActivity() {
     }
 
     private fun setupTabs() {
-        ui.tabLayout.addTab(ui.tabLayout.newTab().setText("基本"))
         ui.tabLayout.addTab(ui.tabLayout.newTab().setText("告票"))
-        ui.tabContent.addView(basicView)
+        ui.tabLayout.addTab(ui.tabLayout.newTab().setText("TG机器人"))
+        ui.tabContent.addView(ticketView)
 
         ui.tabLayout.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
                 ui.tabContent.removeAllViews()
                 when (tab.position) {
-                    0 -> ui.tabContent.addView(basicView)
-                    1 -> ui.tabContent.addView(ticketView)
+                    0 -> ui.tabContent.addView(ticketView)
+                    1 -> ui.tabContent.addView(tgView)
                 }
             }
             override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
@@ -252,7 +234,6 @@ class LightSettingsActivity : AppCompatActivity() {
     private fun loadConfig() {
         editToken.setText(Config.botToken)
         editChatId.setText(Config.chatId)
-        switchTicket.isChecked = Config.ticketEnabled
         editPlates.setText(Config.ticketPlates)
         updateIntervalButtons()
     }
@@ -270,7 +251,7 @@ class LightSettingsActivity : AppCompatActivity() {
             }
         }
 
-        btnSaveBasic.setOnClickListener {
+        btnSaveTg.setOnClickListener {
             val token = editToken.text.toString().trim()
             val chatId = editChatId.text.toString().trim()
             if (token.isEmpty() || chatId.isEmpty()) {
@@ -279,7 +260,7 @@ class LightSettingsActivity : AppCompatActivity() {
             }
             Config.botToken = token
             Config.chatId = chatId
-            Toast.makeText(this, "基本设置已保存", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "TG机器人设置已保存", Toast.LENGTH_SHORT).show()
         }
 
         for ((mins, btn) in intervalBtns) {
@@ -290,13 +271,11 @@ class LightSettingsActivity : AppCompatActivity() {
         }
 
         btnSaveTicket.setOnClickListener {
-            val enabled = switchTicket.isChecked
-            Config.ticketEnabled = enabled
             Config.ticketPlates = editPlates.text.toString().trim()
-            val status = if (enabled) "已开启" else "已关闭"
-            Toast.makeText(this, "告票监控 $status", Toast.LENGTH_SHORT).show()
+            val status = if (Config.ticketEnabled) "已开启" else "已关闭"
+            Toast.makeText(this, "告票设置已保存（$status）", Toast.LENGTH_SHORT).show()
             // Schedule or cancel the alarm
-            if (enabled && Config.ticketPlates.isNotBlank()) {
+            if (Config.ticketEnabled && Config.ticketPlates.isNotBlank()) {
                 LightAlarmReceiverTicket.scheduleAlarm(this, Config.ticketIntervalMinutes)
             } else {
                 LightAlarmReceiverTicket.cancelAlarm(this)

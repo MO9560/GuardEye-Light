@@ -221,16 +221,7 @@ class LightMainActivity : AppCompatActivity() {
         ui.cardTicket.setBackgroundResource(
             if (ticketRunning) R.drawable.card_candy_start else R.drawable.card_candy_stop)
         ui.textTicketStatus.text = if (ticketRunning) "●" else "○"
-        ui.labelTicket.text = if (ticketRunning) "${Config.ticketIntervalMinutes}分" else "停止"
-
-        // Header badge
-        if (ticketRunning) {
-            ui.badgeTicket.visibility = android.view.View.VISIBLE
-            ui.textTicketBadge.text = "告票(${Config.ticketIntervalMinutes}分钟)"
-            ui.dotTicket.background.setTint(getColor(R.color.candy_running))
-        } else {
-            ui.badgeTicket.visibility = android.view.View.GONE
-        }
+        ui.labelTicket.text = if (ticketRunning) "运行中 ${Config.ticketIntervalMinutes}分" else "停止"
 
         // Interval
         val mins = Config.intervalMinutes

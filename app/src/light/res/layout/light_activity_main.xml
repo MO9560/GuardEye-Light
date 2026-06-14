@@ -30,29 +30,6 @@
                 android:textStyle="bold"
                 android:letterSpacing="0.02"/>
 
-            <LinearLayout
-                android:id="@+id/badgeTicket"
-                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/card_bg"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="4dp"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="8dp" android:layout_height="8dp"
-                    android:background="@drawable/rec_dot"
-                    android:id="@+id/dotTicket"
-                    android:layout_marginEnd="4dp"/>
-
-                <TextView
-                    android:id="@+id/textTicketBadge"
-                    android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="告票关"
-                    android:textColor="@color/text_hint"
-                    android:textSize="11sp"/>
-            </LinearLayout>
         </LinearLayout>
 
         <!-- Last Capture Image -->

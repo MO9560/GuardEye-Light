@@ -13,8 +13,8 @@ android {
         applicationId = "com.guardeye"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.3.3"
+        versionCode = 4
+        versionName = "2.3.4"
     }
 
     signingConfigs {
