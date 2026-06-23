@@ -1,6 +1,36 @@
 # Changelog
 
-## [2.3.5] - 2026-06-14
+## [2.3.9] - 2026-06-23
+
+### Fixed
+- **TicketChecker.kt P0 正则跨行 Bug**：`RE_PLATE`/`RE_CAR_LABEL`/`RE_MSG`/`RE_NO_TICKET` 正则 `[^<]*` 不支持跨行匹配，导致 FSM HTML 格式变化时解析失败
+  - 修复：所有 `id=` 元素正则改为 `[\s\S]*?`（支持跨行）
+- **TicketChecker.kt 清理 `parseResponse()` 兜底逻辑**：删除 `html.contains("有違例紀錄")` 兜底判断，避免 FSM 页脚说明文字干扰
+  - `message` 只从 `msgText`（系统消息）和 `noTicket2`（无违章确认）推导
+  - 两者皆空 → `查無資料`
+- **TicketChecker.kt 删除死代码**：`extractHiddenFields()` 函数定义后未被调用，已删除
+
+---
+
+### Fixed
+- **TicketChecker.kt**：修复 `parseResponse()` 判断逻辑错误，导致无违章车牌误报 🔴
+  - 原因：`hasTicket` 判断使用 `html.contains("有違例紀錄")`，FSM 网页页脚含「有違例紀錄」说明文字，导致误判
+  - 修复：`hasTicket` 只从 `message` 推导（`message.contains("有違例紀錄")`），不使用 `html.contains()` 兜底
+  - 参考 `d15b324` 跑通版本，完整恢复 `TicketChecker.kt` 逻辑
+
+---
+
+## [2.3.7] - 2026-06-19
+
+### Fixed
+- **Config.kt P0 Bug**：`lastIntervalCaptureTime` 和 `lastManualCaptureTime` 使用了与其他属性相同的 SharedPreferences Key，导致间隔拍照/手动拍照时间记录读取错误
+  - 新增 `KEY_LAST_INTERVAL_CAPTURE_TIME = "last_interval_capture_time"`
+  - 新增 `KEY_LAST_MANUAL_CAPTURE_TIME = "last_manual_capture_time"`
+  - `lastIntervalCaptureTime` 改用 `KEY_LAST_INTERVAL_CAPTURE_TIME`
+  - `lastManualCaptureTime` 改用 `KEY_LAST_MANUAL_CAPTURE_TIME`
+
+---
+
 
 ### Fixed
 - **TicketChecker.kt**：修复 `parseResponse()` 解析 FSM 响应失败，导致所有车牌都显示有违章（🟴🟴）

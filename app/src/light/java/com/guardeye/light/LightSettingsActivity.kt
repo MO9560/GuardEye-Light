@@ -71,6 +71,7 @@ class LightSettingsActivity : AppCompatActivity() {
             hint = "输入 Telegram Bot Token"
             inputType = (android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
             isSingleLine = true
+            transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
             setBackgroundTintList(android.content.res.ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary)))
             layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }

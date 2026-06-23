@@ -18,8 +18,10 @@ object Config {
     private const val KEY_DEBUG       = "debug_enabled"
     private const val KEY_CAM_FACING  = "camera_facing"
     private const val KEY_OFFSET      = "bot_offset"
-    private const val KEY_LAST_INTERVAL_CAPTURE = "last_interval_capture"
-    private const val KEY_LAST_MANUAL_CAPTURE  = "last_manual_capture"
+    private const val KEY_LAST_INTERVAL_CAPTURE     = "last_interval_capture"
+    private const val KEY_LAST_INTERVAL_CAPTURE_TIME = "last_interval_capture_time"
+    private const val KEY_LAST_MANUAL_CAPTURE      = "last_manual_capture"
+    private const val KEY_LAST_MANUAL_CAPTURE_TIME  = "last_manual_capture_time"
     private const val KEY_CAPTURE_SOURCE       = "last_capture_source"
     private const val KEY_ALERT_MODE             = "alert_mode"
     private const val KEY_LAST_CAPTURE_PATH = "last_capture_path"
@@ -65,16 +67,16 @@ object Config {
         set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE, v).apply()
 
     var lastIntervalCaptureTime: Long
-        get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE, 0L)
-        set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE, v).apply()
+        get() = prefs.getLong(KEY_LAST_INTERVAL_CAPTURE_TIME, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_INTERVAL_CAPTURE_TIME, v).apply()
 
     var lastManualCapture: Long
         get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
         set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
 
     var lastManualCaptureTime: Long
-        get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE, 0L)
-        set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE, v).apply()
+        get() = prefs.getLong(KEY_LAST_MANUAL_CAPTURE_TIME, 0L)
+        set(v) = prefs.edit().putLong(KEY_LAST_MANUAL_CAPTURE_TIME, v).apply()
 
     var lastCapturePath: String?
         get() = prefs.getString(KEY_LAST_CAPTURE_PATH, null)

@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -58,6 +59,7 @@ class LightMainActivity : AppCompatActivity() {
         ui = LightActivityMainBinding.inflate(layoutInflater)
         setContentView(ui.root)
 
+        setVersionText()
         checkPermissions()
         loadConfig()
         setupListeners()
@@ -197,6 +199,18 @@ class LightMainActivity : AppCompatActivity() {
         ui.tabHelp.setOnClickListener {
             Toast.makeText(this, "/start /stop /photo /status /ticket /test",
                 Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // ── 设置顶栏版本号 ───────────────────────────────
+    private fun setVersionText() {
+        try {
+            val pm = packageManager
+            val info = pm.getPackageInfo(packageName, 0)
+            val ver = info.versionName ?: "?"
+            ui.textVersion.text = "GuardEye Light v$ver"
+        } catch (_: Exception) {
+            ui.textVersion.text = "GuardEye Light"
         }
     }
 

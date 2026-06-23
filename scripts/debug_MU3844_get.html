@@ -1,0 +1,185 @@
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" >
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head><title>
+	網上告票查詢服務
+</title><meta content="Microsoft Visual Studio .NET 7.1" name="GENERATOR"><meta content="C#" name="CODE_LANGUAGE"><meta content="JavaScript" name="vs_defaultClientScript"><meta content="http://schemas.microsoft.com/intellisense/ie5" name="vs_targetSchema">
+		<script language="javascript" src="cursor.js" type="text/javascript"></script>
+		<script language="javascript"  type="text/javascript">	
+		
+function PutNum (theNum)
+{	
+	if (theNum == -1)
+	{
+		document.Form1.Calculator.value = document.Form1.Calculator.value.substring(0, document.Form1.Calculator.value.length - 1)
+	}
+	else if (document.Form1.Calculator.value.length < 8)
+	{
+		document.Form1.Calculator.value += theNum		
+	}		
+	
+	document.Form1.Calculator.focus()
+}	
+
+function InitInput()
+{
+	
+	document.Form1.Calculator.value = "";
+	document.getElementById('resW').value = window.screen.width;
+    document.getElementById('resH').value = window.screen.height;	
+}
+
+function keyRestrict(e, validchars) {
+ var key='', keychar='';
+ key = getKeyCode(e);
+ if (key == null) return true;
+ keychar = String.fromCharCode(key);
+ keychar = keychar.toLowerCase();
+ validchars = validchars.toLowerCase();
+ if (validchars.indexOf(keychar) != -1)
+  return true;
+ if ( key==null || key==0 || key==8 || key==9 || key==13 || key==27 || key==32)
+  return true;
+ return false;
+}
+
+ function getKeyCode(e)
+{
+ if (window.event)
+    return window.event.keyCode;
+ else if (e)
+    return e.which;
+ else
+    return null;
+}
+function SetEnd (TB)
+{
+if (TB.createTextRange)
+{
+var FieldRange = TB.createTextRange();
+FieldRange.moveStart('character', TB.value.length);
+FieldRange.collapse();
+FieldRange.select();
+}
+}
+		
+		
+        </script>
+		<link href="wtcss.css" type="text/css" rel="stylesheet" /></head>
+	<body style="BACKGROUND:url(./images/bg.jpg) repeat-x;"onbeforeunload="doHourglass();" bgcolor="#ffffff" onload="focus();Form1.Calculator.focus();javascript:InitInput()"
+		onunload="doHourglass();">
+		<form name="Form1" method="post" action="./Webform1.aspx?carClass=L&amp;Lang=C" id="Form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUKLTg4MTY3Mjc3OQ9kFgICAw9kFgYCAw8PFgIeB1Zpc2libGVoZGQCEA8PFgIeCEltYWdlVXJsBRMuL2ltYWdlcy9uZXdjYXIuZ2lmZGQCEQ8PFgIfAQUSaW1hZ2VzL3RpdGxlX2MuanBnZGRks1TxCCoiZr7qW/rkeqMeSTC6pvc=" />
+
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="CABF88C4" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdAAVbNAwQl492znjpy5psdUzOcOJNvwqY098LMLmBG5qMHZDv4A/twYmzU9WLzm017BzA8XUL0hCtjlYgYxnjGSfwhOVAswf6N5D19YZ/Wy1OIx1fI2yEOEo39edc+GQShhjgRW3i" />
+		    <input type=hidden name="resW" id="resW" value=""/>
+		    <input type=hidden name="resH" id="resH" value=""/>		    
+			
+			<span id="Label1" style="color:Red;font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:19px;font-weight:bold;height:24px;width:505px;Z-INDEX: 108; LEFT: 55px; POSITION: absolute; TOP: 131px">MA-55-19 只需輸入 MA5519</span>
+			
+			<span id="Label2" style="color:Red;font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:16px;font-weight:bold;height:24px;width:65px;Z-INDEX: 106; LEFT: 13px; POSITION: absolute; TOP: 131px">例如:</span>
+			
+			<div style="Z-INDEX: 102; LEFT: 10px; POSITION: absolute; TOP: 80px" id="DivInputBox">	
+			<span id="lbCarClass" style="color:#0000C0;font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:28px;font-weight:bold; vertical-align:top;">車牌編號</span>
+					
+			<INPUT onkeypress="return keyRestrict(event,'1234567890abcdefghijklmnopqrstuvwxyz')" id=""
+				style="BORDER-RIGHT: 2px inset; BORDER-TOP: 2px inset; FONT-WEIGHT: bold; FONT-SIZE: 24px;  MARGIN-LEFT: 0px; BORDER-LEFT: 2px inset; WIDTH: 141px; COLOR: rgb(255,255,255); BORDER-BOTTOM: 2px inset; FONT-FAMILY: verdana,arial,helvetica;  HEIGHT: 40px; BACKGROUND-COLOR: rgb(0,0,0)"
+				onfocus="SetEnd(this)" type="text" maxLength="8" name="Calculator">
+			
+			<input type="submit" name="btnOk" value="確  定" id="btnOk" class="bt" style="font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:18px;font-weight:bold;height:38px;width:102px;position:relative;" />
+			</div>
+		
+			<TABLE id="Table1" style="Z-INDEX: 103; LEFT: 0px; WIDTH: 448px; POSITION: absolute; TOP: 177px; HEIGHT: 224px"
+				cellSpacing="3" cellPadding="2" width="300" border="0">
+				<TR>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(1)" type="button" value="1" name="1"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(2)" type="button" value="2" name="2"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(3)" type="button" value="3" name="3"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(4)" type="button" value="4" name="4"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(5)" type="button" value="5" name="5"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(6)" type="button" value="6" name="6"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(7)" type="button" value="7" name="7"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(8)" type="button" value="8" name="8"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(9)" type="button" value="9" name="9"></TD>
+					<TD style="HEIGHT: 52px; width: 61px;"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(0)" type="button" value="0" name="0"></TD>
+				</TR>
+				<TR>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('A')" type="button" value="A" name="A"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('B')" type="button" value="B" name="B"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('C')" type="button" value="C" name="C"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('D')" type="button" value="D" name="D"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('E')" type="button" value="E" name="E"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('F')" type="button" value="F" name="F"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('G')" type="button" value="G" name="G"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('H')" type="button" value="H" name="H"></TD>
+					<TD style="HEIGHT: 52px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('I')" type="button" value="I" name="I"></TD>
+					<TD style="HEIGHT: 52px; width: 61px;"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('J')" type="button" value="J" name="J"></TD>
+				</TR>
+				<TR>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('K')" type="button" value="K" name="K"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('L')" type="button" value="L" name="L"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('M')" type="button" value="M" name="M"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('N')" type="button" value="N" name="N"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('O')" type="button" value="O" name="O"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('P')" type="button" value="P" name="P"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('Q')" type="button" value="Q" name="Q"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('R')" type="button" value="R" name="R"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('S')" type="button" value="S" name="S"></TD>
+					<TD style="width: 61px"><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('T')" type="button" value="T" name="T"></TD>
+				</TR>
+				<TR>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('U')" type="button" value="U" name="U"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('V')" type="button" value="V" name="V"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('W')" type="button" value="W" name="W"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('X')" type="button" value="X" name="X"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('Y')" type="button" value="Y" name="Y"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum('Z')" type="button" value="Z" name="Z"></TD>
+					<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 27px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(-1)" type="button" value="←" name="<-"></TD>
+							<TD><INPUT style="FONT-WEIGHT: bold; FONT-SIZE: 16px; MARGIN-LEFT: 0px; WIDTH: 56px; FONT-FAMILY: arial; HEIGHT: 38px"
+							onclick="PutNum(' ')" type="button" value="Space" name="Space"></TD>
+				</TR>
+			</TABLE>
+			<DIV style="Z-INDEX: 105; LEFT: 498px; WIDTH: 192px; POSITION: absolute; TOP: 336px; HEIGHT: 62px">
+			<input type="submit" name="Button68" value="確  定" id="Button68" class="bt" style="font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:18px;font-weight:bold;height:38px;width:60px;Z-INDEX: 110; LEFT: 8px; POSITION: absolute; TOP: 16px" />
+					<input type="submit" name="Button65" value="返  回" id="Button65" class="bt" style="font-family:Times New Roman,MingLiU,&#39;微軟正黑體&#39;;font-size:18px;font-weight:bold;height:38px;width:60px;Z-INDEX: 110; LEFT: 73px; POSITION: absolute; TOP: 16px" /></DIV>
+			<input name="Textbox1" type="text" id="Textbox1" style="DISPLAY: none; VISIBILITY: hidden" /><img id="titleImage" src="images/title_c.jpg" border="0" style="Z-INDEX: 110; LEFT: 0px; POSITION: absolute; TOP: 0px" /></form>
+	</body>
+</HTML>

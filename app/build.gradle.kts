@@ -1,8 +1,7 @@
-﻿plugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
-
 
 
 android {
@@ -13,14 +12,14 @@ android {
         applicationId = "com.guardeye"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "2.3.5"
+        versionCode = 9
+        versionName = "2.3.9"
     }
 
     signingConfigs {
         getByName("debug") {
             if (file("signing.properties").exists()) {
-                val props = mapOf<String, String>()
+                val props = mutableMapOf<String, String>()
                 file("signing.properties").readLines().forEach { line ->
                     val parts = line.split("=", limit = 2)
                     if (parts.size == 2) {
@@ -63,28 +62,10 @@ android {
         viewBinding = true
         buildConfig = true
     }
-
-    flavorDimensions += listOf("version")
-
-    productFlavors {
-        create("full") {
-            dimension = "version"
-            applicationIdSuffix = ""
-            resValue("string", "app_name", "GuardEye")
-            buildConfigField("boolean", "IS_LIGHT", "false")
-        }
-        create("light") {
-            dimension = "version"
-            applicationIdSuffix = ".light"
-            minSdk = 21
-            resValue("string", "app_name", "GuardEye Light")
-            buildConfigField("boolean", "IS_LIGHT", "true")
-        }
-    }
 }
 
 dependencies {
-    // ── Shared by both flavors ───────────────────────────────────────
+    // ── Shared dependencies ───────────────────────────────────────
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
@@ -93,21 +74,9 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("com.google.android.material:material:1.11.0")
 
-    // ── Full flavor only: CameraX + TFLite ────────────────────────────
-    // AGP auto-creates "fullImplementation" from the "full" product flavor
-    "fullImplementation"("androidx.camera:camera-core:1.3.1")
-    "fullImplementation"("androidx.camera:camera-camera2:1.3.1")
-    "fullImplementation"("androidx.camera:camera-lifecycle:1.3.1")
-    "fullImplementation"("androidx.camera:camera-view:1.3.1")
-    // ImageAnalysis is included in camera-core — no separate artifact needed
-    "fullImplementation"("org.tensorflow:tensorflow-lite:2.14.0")
-    "fullImplementation"("org.tensorflow:tensorflow-lite-support:0.4.4")
-    // Gson for JSON serialization (rolling buffer metadata, face vectors)
-    "fullImplementation"("com.google.code.gson:gson:2.10.1")
-
-    // ── Light flavor only: CameraX (replaces deprecated Camera1) ──────
-    "lightImplementation"("androidx.camera:camera-core:1.3.1")
-    "lightImplementation"("androidx.camera:camera-camera2:1.3.1")
-    "lightImplementation"("androidx.camera:camera-lifecycle:1.3.1")
-    "lightImplementation"("androidx.camera:camera-view:1.3.1")
+    // ── CameraX (Light version) ──────────────────────────────────
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
 }

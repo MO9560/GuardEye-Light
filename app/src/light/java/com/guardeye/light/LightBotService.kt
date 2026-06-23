@@ -1,5 +1,6 @@
 package com.guardeye.light
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -25,6 +26,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleService
 import com.guardeye.BuildConfig
+import com.guardeye.light.ServiceStatus
 import com.guardeye.Config
 import com.guardeye.TelegramBot
 import kotlinx.coroutines.CoroutineScope
@@ -212,6 +214,8 @@ class LightBotService : LifecycleService() {
         // Unconditional: AlarmReceiver-only restarts still need polling alive.
         // Safe to call repeatedly (startPolling cancels old job first).
         startPolling()
+        ServiceStatus.setBotPolling(true)
+        ServiceStatus.setMonitoring(Config.enabled, Config.intervalMinutes)
 
         // ── 3. Start foreground service ──────────────────────────────────
         startForeground(NOTIF_ID, buildNotification())
@@ -263,6 +267,7 @@ class LightBotService : LifecycleService() {
     // ── Telegram Polling ────────────────────────────────────────────────────────
 
     private fun startPolling() {
+        ServiceStatus.setBotPolling(false)
         pollingJob?.cancel()
         pollingJob = cmdScope.launch {
             var retryDelay = 10_000L
@@ -280,6 +285,11 @@ class LightBotService : LifecycleService() {
                     result.getOrNull()?.let { updates ->
                         for (update in updates) {
                             Config.botOffset = update.updateId + 1
+                            // DEBUG: echo every received message
+                            try {
+                                TelegramBot.sendText(Config.botToken, update.chatId,
+                                    "[ECHO] text=${update.text} chatId=${update.chatId}")
+                            } catch (_: Exception) {}
                             cmdScope.launch(Dispatchers.IO) {
                                 handleCommand(update.text, update.chatId)
                             }
@@ -301,6 +311,7 @@ class LightBotService : LifecycleService() {
     }
 
     private fun stopPolling() {
+        ServiceStatus.setBotPolling(false)
         pollingJob?.cancel()
         pollingJob = null
         // WakeLock 由 onDestroy() 统一释放，此处不释放
@@ -491,6 +502,7 @@ class LightBotService : LifecycleService() {
 
     private fun captureWithImageCapture(imgCapture: ImageCapture, source: String, chatId: String?, quality: String, onDone: (() -> Unit)? = null) {
         cameraLifecycleOwner.start()
+        val captureStartMs = System.currentTimeMillis()
         capturing = true
 
         // 15-second timeout guard — capture chatId locally to avoid closure capture of nullable var
@@ -508,6 +520,15 @@ class LightBotService : LifecycleService() {
 
         try {
             Log.d(TAG, "Taking picture (source=$source)")
+            // Update ServiceStatus
+            ServiceStatus.updateCameraStatus {
+                copy(
+                    serviceRunning = true,
+                    cameraProviderReady = cameraProvider != null,
+                    backCameraBound = imageCapture != null,
+                    wakeLockHeld = wakeLock.isHeld
+                )
+            }
             imgCapture.takePicture(
                 cameraExecutor,
                 object : ImageCapture.OnImageCapturedCallback() {
@@ -522,6 +543,9 @@ class LightBotService : LifecycleService() {
                         image.close()
                         capturing = false
                         Log.d(TAG, "JPEG captured: ${data.size} bytes, source=$source, quality=$quality")
+                        // Update ServiceStatus on success
+                        val durMs = System.currentTimeMillis() - captureStartMs
+                        ServiceStatus.recordCaptureResult(true, durMs)
                         saveLastCapture(data)
                         processAndSend(data, source, quality)
                         onDone?.invoke()
@@ -542,6 +566,7 @@ class LightBotService : LifecycleService() {
                                 ImageCapture.ERROR_UNKNOWN       -> "[拍照失败：${exception.message}]"
                                 else                             -> "[拍照失败（${exception.imageCaptureError}）：${exception.message}]"
                             }
+                            ServiceStatus.recordCaptureResult(false, 0, msg)
                             TelegramBot.sendText(Config.botToken, cId, msg)
                         }
                         onDone?.invoke()
@@ -877,7 +902,9 @@ class LightBotService : LifecycleService() {
         val interval = Config.intervalMinutes
         val enabled = Config.enabled
         val mode = Config.debugMode
-        val tempStr = if (temp > 0) "$temp℃" else "-"
+        val tempStr = if (temp > 0) "$temp\u2103" else "-"
+        val cam = ServiceStatus.cameraStatus
+        val bot = ServiceStatus.botStatus
         return buildString {
             append("版本：${BuildConfig.VERSION_NAME}\n")
             append("\u2500".repeat(15) + "\n")
@@ -885,12 +912,34 @@ class LightBotService : LifecycleService() {
             append("调试：${if (mode) "开启" else "关闭"}\n")
             append("间隔：$interval 分钟\n")
             append("电量：$battery%  $tempStr\n")
-            append("\u2500".repeat(15) + "\n")
+            if (mode) {
+                append("\u2500".repeat(15) + "\n")
+                append("[CameraX]\n")
+                append(" · 提供商：${if (cam.cameraProviderReady) "\u2705 正常" else "\u274c 未就绪"}\n")
+                append(" · 后镜头：${if (cam.backCameraBound) "\u2705 已绑定" else "\u274c 未绑定"}\n")
+                append(" · 前镜头：${if (cam.frontCameraBound) "\u2705 已绑定" else "\u274c 未绑定"}\n")
+                append(" · 拍照数：${cam.captureCount}  失败：${cam.failedCaptureCount}\n")
+                val lastT = if (cam.lastCaptureTime > 0) {
+                    java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(cam.lastCaptureTime))
+                } else { "无" }
+                append(" · 上次拍照：$lastT  耗时：${cam.lastCaptureDurationMs}ms\n")
+                append(" · 上次结果：${if (cam.lastCaptureSuccess) "\u2705" else "\u274c " + cam.lastErrorMessage}\n")
+                append("[Bot]\n")
+                append(" · Polling：${if (bot.pollingActive) "\u2705 运行中" else "\u274c 已停止"}\n")
+                append(" · 命令数：${bot.commandCount}\n")
+                append("[WakeLock] ${if (cam.wakeLockHeld) "\u26a1 持有中" else "\u274c 未持有"}\n")
+                append("\u2500".repeat(15) + "\n")
+            }
             append("命令列表：\n")
-            append("/start \u2014 启动监控\n")
-            append("/stop \u2014 停止监控\n")
-            append("/photo \u2014 拍照\n")
-            append("/interval \u2014 间隔（分钟）")
+            append("/start  ▶ 启动监控\n")
+            append("/stop   ■ 停止监控\n")
+            append("/photo  📷 拍照\n")
+            append("/ticket 🏛 告票查询\n")
+            append("/interval \u23f1 间隔（分钟）\n")
+            append("/status  \u2139\ufe0f 状态\n")
+            append("/test   \u2705 测试\n")
+            append("/battery 🔋 电池优化\n")
+            append("/debug  🐞 调试模式")
         }
     }
 
@@ -914,15 +963,16 @@ class LightBotService : LifecycleService() {
 
     // ── Notification ──────────────────────────────────────────────────────────
 
-    private fun buildNotification() = NotificationCompat.Builder(this, com.guardeye.GuardEyeApplication.CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setContentTitle("[GuardEye Light] 监控中")
-        .setContentText(if (Config.enabled) "定时拍照 · ${Config.intervalMinutes}分钟/次" else "已停止")
-        .setCategory(NotificationCompat.CATEGORY_SERVICE)
-        .setOngoing(true)
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .build()
-
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, com.guardeye.GuardEyeApplication.CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentTitle("[GuardEye Light] 监控中")
+            .setContentText(if (Config.enabled) "定时拍照 · ${Config.intervalMinutes}分钟/次" else "已停止")
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+    }
 }
 
 /**
