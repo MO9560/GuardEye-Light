@@ -1,42 +1,58 @@
-# GuardEye v3.0
+# GuardEye Light
 
-Telegram-controlled Android surveillance camera with AI detection.
+澳门交通告票监控 + 远程相机 Android 应用（Light 版）
 
-## Features
+## 功能
 
-- **Telegram control** — `/start` `/stop` `/photo` `/status` `/interval N` `/detect on/off` `/debug on/off`
-- **Scheduled capture** — AlarmManager triggers photo at configurable intervals (1–10 min)
-- **AI detection** — YOLOv8n model runs on-device, detects persons/vehicles/suspicious targets
-- **Alert push** — Detection results sent directly to your Telegram chat
-- **Debug mode** — Full telemetry (timing, memory, camera status) in-app and via bot
+- 📛 **告票查询**：定时查询车辆违章记录，推送到 Telegram
+- 📷 **远程拍照**：通过 Telegram 指令远程触发手机拍照
+- 🔋 **后台保活**：五层保活策略，确保服务持续运行
+- 📱 **TG Bot 控制**：12 个 Telegram 指令，完全远程控制
 
-## Setup
+## Telegram 指令
 
-1. Create a bot via [@BotFather](https://t.me/BotFather), get the token
-2. Start a chat with your bot, send `/start`, get your `chat_id` from [IDBot](https://t.me/myidbot)
-3. Install the APK, fill in Token + Chat ID, tap "Start Monitoring"
+| 指令 | 功能 |
+|------|------|
+| `/start` | 启动监控 |
+| `/stop` | 停止监控 |
+| `/photo` | 拍照（默认后镜头） |
+| `/photo f` | 拍照（前镜头） |
+| `/ticket` | 查询告票 |
+| `/ticket MO9560,AA5186` | 查询指定车牌告票 |
+| `/interval 10` | 设置监控间隔（分钟） |
+| `/status` | 查看状态 |
+| `/test` | 测试连接 |
+| `/battery` | 电池优化提示 |
+| `/debug` | 切换调试模式 |
 
-## Architecture
+## 安装
 
-```
-Config (SharedPreferences — single source of truth)
-    │
-    ├── TelegramBot  ← stateless utility: sendText(), sendPhoto()
-    │
-    ├── BotService   ← Foreground Service, long-polls Telegram, handles commands
-    │
-    └── CameraService ← Regular Service, CameraX + YOLOv8n, captures & sends, then stops
+1. 下载最新 Release APK
+2. 安装到 Android 手机（minSdk 26 / Android 8.0）
+3. 打开应用，授予权限（相机、存储、后台运行）
+4. 在设置页配置 Telegram Bot Token 和 Chat ID
+5. 发送 `/start` 启动监控
 
-AlarmReceiver ← wakes CameraService on schedule
-```
+## Telegram Bot 配置
 
-## Build
+1. 找 @BotFather 创建 Bot，获取 Token
+2. 打开 https://api.telegram.org/bot<TOKEN>/getUpdates 获取 Chat ID
+3. 在应用设置页填入 Token 和 Chat ID
 
-```bash
-./gradlew assembleDebug
-```
+## 技术栈
 
-## Debug Mode
+- **语言**：Kotlin
+- **相机**：CameraX
+- **网络**：OkHttp
+- **TG Bot**：Telegram Bot API（长轮询）
+- **告票查询**：FSM 网站爬取（澳门交通违例查询系统）
 
-Enables verbose telemetry in the app UI and Telegram bot responses:
-timing, memory usage, model load time, network latency, detection results.
+## 版本
+
+当前版本：`v2.3.9`
+
+查看完整变更记录：[CHANGELOG.md](CHANGELOG.md)
+
+## License
+
+MIT
